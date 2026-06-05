@@ -1839,7 +1839,7 @@ async function unlockEditor() {
 
   let codeAllowed = editorCode === activeContent.editorCode;
 
-  if (!codeAllowed && state.hostedConfigStatus === "ready") {
+  if (!codeAllowed) {
     try {
       codeAllowed = await verifyEditorToken(editorCode);
     } catch (error) {
