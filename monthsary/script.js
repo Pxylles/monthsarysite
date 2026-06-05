@@ -1815,18 +1815,46 @@ function openEditorPanel() {
   renderApp();
 }
 
-function unlockEditor() {
-  if (
-    state.editorCodeInput.length !== 6 ||
-    state.editorCodeInput !== activeContent.editorCode
-  ) {
+async function verifyEditorToken(adminCode) {
+  const response = await fetch("/api/auth", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ adminCode }),
+  });
+
+  return response.ok;
+}
+
+async function unlockEditor() {
+  const editorCode = state.editorCodeInput;
+
+  if (editorCode.length !== 6) {
     state.editorError = "That editor code is not right yet.";
     state.editorCodeInput = "";
     renderApp();
     return;
   }
 
-  state.editorSessionCode = state.editorCodeInput;
+  let codeAllowed = editorCode === activeContent.editorCode;
+
+  if (!codeAllowed && state.hostedConfigStatus === "ready") {
+    try {
+      codeAllowed = await verifyEditorToken(editorCode);
+    } catch (error) {
+      codeAllowed = false;
+    }
+  }
+
+  if (!codeAllowed) {
+    state.editorError = "That editor code is not right yet.";
+    state.editorCodeInput = "";
+    renderApp();
+    return;
+  }
+
+  state.editorSessionCode = editorCode;
   state.editorCodeInput = "";
   state.ownerEmail = "";
   openEditorPanel();
