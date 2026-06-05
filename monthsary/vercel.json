@@ -1,0 +1,16 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/config",
+      "destination": "/api/config.js"
+    },
+    {
+      "source": "/api/auth",
+      "destination": "/api/auth.js"
+    },
+    {
+      "source": "/api/responses",
+      "destination": "/api/responses.js"
+    }
+  ]
+}

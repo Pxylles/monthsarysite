@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>For My Favorite Girl</title>
+    <meta
+      name="description"
+      content="A cute private monthsary site with a passcode gate, question flow, and a final envelope letter."
+    />
+    <meta name="theme-color" content="#fff8f4" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Nunito:wght@400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="background-blur blur-one" aria-hidden="true"></div>
+    <div class="background-blur blur-two" aria-hidden="true"></div>
+    <div class="background-grid" aria-hidden="true"></div>
+
+    <main id="app"></main>
+
+    <noscript>
+      <p class="no-script">
+        This little site needs JavaScript turned on so the passcode and
+        questions can work.
+      </p>
+    </noscript>
+
+    <script src="./content.js"></script>
+    <script src="./script.js"></script>
+    <script>
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker.register("./service-worker.js").catch(() => {});
+        });
+      }
+    </script>
+  </body>
+</html>
