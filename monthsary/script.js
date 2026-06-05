@@ -751,11 +751,11 @@ function renderGameScreen() {
                 ${game.locked ? "" : `<p class="${statusClass}">${escapeHtml(game.message)}</p>`}
                 <div class="button-row">
                   ${
-                    game.locked
+                    game.locked || game.won
                       ? ""
                       : `
                         <button class="primary-button" type="button" data-action="start-game">
-                          ${game.won ? "Run test again" : game.failed ? "Retry test" : "Start test"}
+                          ${game.failed ? "Retry test" : "Start test"}
                         </button>
                       `
                   }
