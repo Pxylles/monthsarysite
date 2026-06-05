@@ -2609,22 +2609,28 @@ async function saveEditorChanges() {
 
     activeContent = result.content;
     let localSaveWarning = "";
+    let onlineSaveError = "";
 
-    if (state.hostedConfigStatus === "ready") {
+    try {
       await saveHostedContent(activeContent);
+      state.hostedConfigStatus = "ready";
       try {
         saveActiveContent();
       } catch (error) {
         localSaveWarning = error.message;
       }
-    } else {
+    } catch (error) {
+      onlineSaveError = error.message || "The online configuration could not be saved.";
+      state.hostedConfigStatus = "unavailable";
       saveActiveContent();
     }
 
     state.editorDraft = createEditorDraft(activeContent);
     state.editorStatus = localSaveWarning
       ? `Saved online, but this browser could not keep a local copy. ${localSaveWarning}`
-      : state.hostedConfigStatus === "ready"
+      : onlineSaveError
+        ? `Saved only on this browser. Online save failed: ${onlineSaveError}`
+        : state.hostedConfigStatus === "ready"
         ? "Saved online. The hosted site now uses your new questions and letter."
         : "Saved on this browser. Add hosted storage to sync it online.";
     state.editorStatusType = "info";
