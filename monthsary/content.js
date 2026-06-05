@@ -8,7 +8,7 @@ window.defaultSiteContent = {
   accessCode: "290629",
 
   // This protects the built-in browser editor.
-  editorCode: "010101",
+  editorCode: "081705",
 
   lockScreen: {
     eyebrow: "Private access only",
