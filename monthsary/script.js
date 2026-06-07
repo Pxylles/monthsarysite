@@ -35,6 +35,7 @@ const state = {
   responseSubmitted: false,
   responseSaveStatus: "idle",
   envelopeOpen: false,
+  envelopeHeartbeat: false,
   editorCodeInput: "",
   editorSessionCode: "",
   editorGoogleIdToken: "",
@@ -1131,7 +1132,7 @@ function renderResponseSaveNote() {
 
 function renderLetter() {
   return `
-    <article class="opened-letter">
+    <article class="opened-letter${state.envelopeHeartbeat ? " is-revealed" : ""}">
       <p class="eyebrow">${escapeHtml(activeContent.letter.eyebrow)}</p>
       <h2 class="letter-title">${escapeHtml(activeContent.letter.title)}</h2>
       ${activeContent.letter.paragraphs
@@ -1373,10 +1374,11 @@ function renderFinaleScreen() {
 
 function scrollEnvelopeIntoView() {
   window.setTimeout(() => {
-    document
-      .getElementById("envelope-section")
-      ?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, 120);
+    const letterSection = document.querySelector(".opened-letter");
+    const target = letterSection || document.getElementById("envelope-section");
+
+    target?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, 220);
 }
 
 function renderKeepsakeScreen() {
@@ -1393,6 +1395,11 @@ function renderKeepsakeScreen() {
         </div>
         ${renderLetter()}
         ${renderMemoryGallery()}
+        ${_pendingAudioUnmute && state.screen === "keepsake" ? `
+          <div class="enable-music-wrap">
+            <button class="enable-music-button" type="button" data-action="enable-music">Tap to enable music</button>
+          </div>
+        ` : ""}
       </div>
     </section>
   `;
@@ -2655,17 +2662,28 @@ function goToNextQuestion() {
 }
 
 function toggleEnvelope() {
-  state.envelopeOpen = !state.envelopeOpen;
-  if (state.envelopeOpen) {
+  const willOpen = !state.envelopeOpen;
+  state.envelopeOpen = willOpen;
+
+  if (willOpen) {
     state.musicOn = true;
     saveMusicPreference();
     syncAmbientMusic();
+    state.envelopeHeartbeat = true;
+    renderApp();
+    scrollEnvelopeIntoView();
+
+    window.setTimeout(() => {
+      state.envelopeHeartbeat = false;
+      renderApp();
+    }, 700);
   } else {
     stopSurpriseMusic();
+    state.envelopeHeartbeat = false;
     state.musicOn = false;
     saveMusicPreference();
+    renderApp();
   }
-  renderApp();
 }
 
 function toggleTheme() {
@@ -3897,6 +3915,18 @@ root.addEventListener("click", (event) => {
 
   if (action === "toggle-music") {
     toggleMusic();
+    return;
+  }
+
+  if (action === "enable-music") {
+    const audio = createSurpriseAudio();
+    if (audio) {
+      audio.muted = false;
+      audio.volume = 0.5;
+      playSurpriseMusic();
+    }
+    _pendingAudioUnmute = false;
+    renderApp();
     return;
   }
 
