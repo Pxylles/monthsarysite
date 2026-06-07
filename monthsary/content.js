@@ -34,6 +34,10 @@ window.defaultSiteContent = {
     ],
   },
 
+  game: {
+    rounds: 3,
+  },
+
   // Add more question objects to this array whenever you want.
   // Supported types right now: "choice" and "text"
   questions: [

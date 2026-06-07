@@ -682,6 +682,42 @@ button {
   grid-column: 1 / -1;
 }
 
+.editor-slider-row {
+  display: grid;
+  gap: 10px;
+}
+
+.editor-range {
+  width: 100%;
+  appearance: none;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.editor-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: none;
+}
+
+.editor-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: none;
+}
+
+.editor-range-value {
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: var(--ink);
+}
+
 .editor-label {
   font-size: 0.92rem;
   font-weight: 800;

@@ -53,16 +53,18 @@ const state = {
   hostedConfigStatus: "loading",
   theme: loadSavedTheme(),
   musicOn: loadSavedMusicPreference(),
-  game: createInitialGameState(),
+  game: createInitialGameState(activeContent.game?.rounds),
 };
 
-function createInitialGameState() {
+function createInitialGameState(totalRounds = 3) {
+  const rounds = Number.isInteger(Number(totalRounds)) && Number(totalRounds) > 0 ? Number(totalRounds) : 3;
+
   return {
     running: false,
     won: false,
     failed: false,
     round: 1,
-    totalRounds: 3,
+    totalRounds: rounds,
     sequence: [],
     selected: [],
     activeTile: null,
@@ -227,6 +229,11 @@ function normalizeContent(candidate) {
   base.lockScreen.title = cleanText(source.lockScreen?.title, base.lockScreen.title);
   base.lockScreen.copy = cleanText(source.lockScreen?.copy, base.lockScreen.copy);
   base.lockScreen.hint = cleanText(source.lockScreen?.hint, base.lockScreen.hint);
+
+  const gameRounds = Number(source.game?.rounds);
+  base.game = {
+    rounds: Number.isInteger(gameRounds) && gameRounds > 0 ? gameRounds : base.game.rounds,
+  };
 
   base.intro.title = cleanText(source.intro?.title, base.intro.title);
   base.intro.copy = cleanText(source.intro?.copy, base.intro.copy);
@@ -617,6 +624,7 @@ function createEditorDraft(source = activeContent) {
       feedback: question.feedback || "",
       optionsText: question.type === "choice" ? formatChoiceOptions(question.options) : "",
     })),
+    gameRounds: source.game?.rounds || 3,
   };
 }
 
@@ -1278,6 +1286,27 @@ function renderEditorInput(label, field, value, help = "", extraAttributes = "")
   `;
 }
 
+function renderEditorSlider(label, field, value, min = 1, max = 10, help = "") {
+  return `
+    <label class="editor-field editor-field-full">
+      <span class="editor-label">${escapeHtml(label)}</span>
+      <div class="editor-slider-row">
+        <input
+          class="editor-input editor-range"
+          type="range"
+          min="${min}"
+          max="${max}"
+          data-editor-field="${escapeHtml(field)}"
+          value="${escapeHtml(value)}"
+          oninput="this.nextElementSibling.textContent = this.value"
+        />
+        <span class="editor-range-value">${escapeHtml(value)}</span>
+      </div>
+      ${help ? `<span class="editor-help">${escapeHtml(help)}</span>` : ""}
+    </label>
+  `;
+}
+
 function renderEditorTextarea(label, field, value, help = "", rows = 4) {
   return `
     <label class="editor-field editor-field-full">
@@ -1715,6 +1744,14 @@ function renderEditorPanel() {
               "This protects the built-in editor.",
               'inputmode="numeric" maxlength="6"'
             )}
+            ${renderEditorSlider(
+              "Memory game rounds",
+              "gameRounds",
+              draft.gameRounds,
+              1,
+              10,
+              "Choose how many rounds the minigame should use."
+            )}
             ${renderEditorInput("Lock screen title", "lockTitle", draft.lockTitle)}
             ${renderEditorTextarea("Lock screen copy", "lockCopy", draft.lockCopy, "", 3)}
             ${renderEditorInput(
@@ -1969,7 +2006,7 @@ async function unlockEditor() {
 }
 
 function resetGameState() {
-  state.game = createInitialGameState();
+  state.game = createInitialGameState(activeContent.game?.rounds);
 }
 
 function stopGameLoop() {
@@ -2848,6 +2885,11 @@ function buildContentFromDraft() {
       items: galleryItems,
     },
     questions,
+    game: {
+      rounds: Number.isInteger(Number(draft.gameRounds)) && Number(draft.gameRounds) > 0
+        ? Number(draft.gameRounds)
+        : defaultContent.game.rounds,
+    },
   });
 
   return { content: nextContent };
