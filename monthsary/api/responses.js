@@ -54,6 +54,24 @@ async function readRequestBody(request) {
   return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
 }
 
+function parseSavedResponses(saved) {
+  return (Array.isArray(saved) ? saved : [])
+    .map((item, index) => {
+      try {
+        const parsed = JSON.parse(item);
+
+        if (!parsed.id) {
+          parsed.id = `legacy-${parsed.submittedAt || "unknown"}-${index}`;
+        }
+
+        return parsed;
+      } catch (error) {
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
+
 module.exports = async function handler(request, response) {
   if (request.method === "POST") {
     try {
@@ -85,15 +103,7 @@ module.exports = async function handler(request, response) {
       }
 
       const saved = await runRedisCommand(["LRANGE", RESPONSES_KEY, "0", "99"]);
-      const responses = (Array.isArray(saved) ? saved : [])
-        .map((item) => {
-          try {
-            return JSON.parse(item);
-          } catch (error) {
-            return null;
-          }
-        })
-        .filter(Boolean);
+      const responses = parseSavedResponses(saved);
 
       sendJson(response, 200, { responses });
     } catch (error) {
@@ -103,6 +113,47 @@ module.exports = async function handler(request, response) {
     return;
   }
 
-  response.setHeader("Allow", "GET, POST");
+  if (request.method === "DELETE") {
+    try {
+      const { adminCode, googleIdToken, responseId } = await readRequestBody(request);
+
+      if (!(await canManageSite({ adminCode, googleIdToken }))) {
+        sendJson(response, 401, { error: "That editor code cannot delete responses." });
+        return;
+      }
+
+      if (!responseId) {
+        sendJson(response, 400, { error: "Missing response id." });
+        return;
+      }
+
+      const saved = await runRedisCommand(["LRANGE", RESPONSES_KEY, "0", "99"]);
+      const index = (Array.isArray(saved) ? saved : []).findIndex((item, itemIndex) => {
+        try {
+          const parsed = JSON.parse(item);
+          const id = parsed.id || `legacy-${parsed.submittedAt || "unknown"}-${itemIndex}`;
+          return id === responseId;
+        } catch (error) {
+          return false;
+        }
+      });
+
+      if (index < 0) {
+        sendJson(response, 404, { error: "That response was not found." });
+        return;
+      }
+
+      const marker = `__deleted_response_${Date.now()}_${Math.random().toString(16).slice(2)}__`;
+      await runRedisCommand(["LSET", RESPONSES_KEY, String(index), marker]);
+      await runRedisCommand(["LREM", RESPONSES_KEY, "1", marker]);
+      sendJson(response, 200, { ok: true });
+    } catch (error) {
+      sendJson(response, error.statusCode || 500, { error: error.message });
+    }
+
+    return;
+  }
+
+  response.setHeader("Allow", "GET, POST, DELETE");
   sendJson(response, 405, { error: "Method not allowed." });
 };

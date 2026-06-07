@@ -1612,7 +1612,17 @@ function renderSavedResponsesPanel() {
                     <article class="response-card">
                       <div class="response-card-top">
                         <h3 class="editor-card-title">Response ${state.savedResponses.length - index}</h3>
-                        <span class="meta-pill">${escapeHtml(formatResponseDate(savedResponse.submittedAt))}</span>
+                        <div class="editor-inline-actions">
+                          <span class="meta-pill">${escapeHtml(formatResponseDate(savedResponse.submittedAt))}</span>
+                          <button
+                            class="tiny-button tiny-button-danger"
+                            type="button"
+                            data-action="delete-response"
+                            data-response-id="${escapeHtml(savedResponse.id || "")}"
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </div>
                       ${(savedResponse.answers || [])
                         .map(
@@ -2971,6 +2981,52 @@ async function loadSavedResponses() {
   }
 }
 
+async function deleteSavedResponse(responseId) {
+  if (!responseId) {
+    return;
+  }
+
+  const savedResponse = state.savedResponses.find((item) => item.id === responseId);
+  const label = savedResponse
+    ? `Response from ${formatResponseDate(savedResponse.submittedAt)}`
+    : "this response";
+
+  if (!window.confirm(`Delete ${label}? This cannot be undone.`)) {
+    return;
+  }
+
+  state.savedResponsesStatus = "loading";
+  state.savedResponsesError = "";
+  renderApp();
+
+  try {
+    const response = await fetch("/api/responses", {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        adminCode: state.editorSessionCode,
+        googleIdToken: state.editorGoogleIdToken,
+        responseId,
+      }),
+    });
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(payload.error || "Response could not be deleted.");
+    }
+
+    state.savedResponses = state.savedResponses.filter((item) => item.id !== responseId);
+    state.savedResponsesStatus = "ready";
+    renderApp();
+  } catch (error) {
+    state.savedResponsesStatus = "error";
+    state.savedResponsesError = error.message || "Response could not be deleted.";
+    renderApp();
+  }
+}
+
 function escapeCsv(value) {
   return `"${String(value ?? "").replaceAll('"', '""')}"`;
 }
@@ -3013,7 +3069,7 @@ function printSavedResponses() {
     return;
   }
 
-  const printWindow = window.open("", "_blank", "noopener,noreferrer,width=900,height=720");
+  const printWindow = window.open("", "_blank", "width=900,height=720");
 
   if (!printWindow) {
     state.savedResponsesStatus = "error";
@@ -3025,20 +3081,36 @@ function printSavedResponses() {
   const responseMarkup = state.savedResponses
     .map(
       (savedResponse, index) => `
-        <section>
-          <h2>Response ${state.savedResponses.length - index}</h2>
-          <p class="date">${escapeHtml(formatResponseDate(savedResponse.submittedAt))}</p>
-          ${(savedResponse.answers || [])
-            .map(
-              (item) => `
-                <div class="answer">
-                  <p>${escapeHtml(item.prompt || "Question")}</p>
-                  <strong>${escapeHtml(item.answer || "No answer")}</strong>
-                </div>
-              `
-            )
-            .join("")}
-        </section>
+        <article class="fold-card">
+          <section class="fold-page cover-page">
+            <div class="fold-guide" aria-hidden="true"></div>
+            <div class="cover-panel">
+              <p class="kicker">Monthsary response card</p>
+              <h1>Response ${state.savedResponses.length - index}</h1>
+              <p class="date">${escapeHtml(formatResponseDate(savedResponse.submittedAt))}</p>
+            </div>
+            <div class="back-panel">
+              <p>Fold along the center line.</p>
+              <p class="tiny">Print this page first, then the answers page if your printer does not duplex.</p>
+            </div>
+          </section>
+          <section class="fold-page answer-page">
+            <div class="fold-guide" aria-hidden="true"></div>
+            <div class="answer-panel">
+              <p class="kicker">Her answers</p>
+              ${(savedResponse.answers || [])
+                .map(
+                  (item) => `
+                    <div class="answer">
+                      <p>${escapeHtml(item.prompt || "Question")}</p>
+                      <strong>${escapeHtml(item.answer || "No answer")}</strong>
+                    </div>
+                  `
+                )
+                .join("")}
+            </div>
+          </section>
+        </article>
       `
     )
     .join("");
@@ -3049,25 +3121,106 @@ function printSavedResponses() {
       <head>
         <title>Monthsary Responses</title>
         <style>
-          body { font-family: Arial, sans-serif; color: #202124; margin: 32px; }
-          h1 { margin: 0 0 24px; }
-          section { break-inside: avoid; border-top: 1px solid #ddd; padding: 18px 0; }
-          h2 { margin: 0 0 4px; }
-          .date { margin: 0 0 14px; color: #666; }
-          .answer { margin: 0 0 14px; }
-          .answer p { margin: 0 0 4px; font-weight: 700; }
-          .answer strong { white-space: pre-wrap; font-weight: 400; }
+          @page { size: A4 portrait; margin: 12mm; }
+          * { box-sizing: border-box; }
+          body {
+            margin: 0;
+            font-family: Georgia, "Times New Roman", serif;
+            color: #2b1f23;
+            background: #fff;
+          }
+          .fold-card { page-break-after: always; }
+          .fold-page {
+            position: relative;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18mm;
+            min-height: 267mm;
+            padding: 8mm;
+            page-break-after: always;
+            break-after: page;
+          }
+          .fold-card:last-child .fold-page:last-child {
+            page-break-after: auto;
+            break-after: auto;
+          }
+          .fold-guide {
+            position: absolute;
+            inset: 8mm auto 8mm 50%;
+            border-left: 1px dashed #b28b93;
+          }
+          .cover-panel,
+          .back-panel,
+          .answer-panel {
+            display: grid;
+            align-content: center;
+            min-height: 240mm;
+            padding: 14mm;
+            border: 1px solid #d8b8bd;
+            border-radius: 8mm;
+            background: #fff8f4;
+          }
+          .answer-panel {
+            grid-column: 1 / -1;
+            align-content: start;
+            background: #fff;
+          }
+          .kicker {
+            margin: 0 0 8mm;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font: 700 10pt Arial, sans-serif;
+            color: #9b4f62;
+          }
+          h1 {
+            margin: 0 0 8mm;
+            font-size: 34pt;
+            line-height: 1.05;
+          }
+          .date,
+          .tiny,
+          .back-panel p {
+            margin: 0 0 5mm;
+            font: 11pt Arial, sans-serif;
+            color: #685760;
+          }
+          .answer {
+            break-inside: avoid;
+            margin: 0 0 7mm;
+            padding-bottom: 5mm;
+            border-bottom: 1px solid #ead7da;
+          }
+          .answer p {
+            margin: 0 0 2mm;
+            font: 700 10pt Arial, sans-serif;
+            color: #9b4f62;
+          }
+          .answer strong {
+            display: block;
+            white-space: pre-wrap;
+            font-size: 14pt;
+            line-height: 1.35;
+            font-weight: 400;
+          }
+          @media screen {
+            body { background: #f4ecef; padding: 24px; }
+            .fold-page {
+              max-width: 210mm;
+              margin: 0 auto 24px;
+              background: #fff;
+              box-shadow: 0 16px 48px rgba(40, 24, 30, 0.18);
+            }
+          }
         </style>
       </head>
       <body>
-        <h1>Monthsary Responses</h1>
         ${responseMarkup}
       </body>
     </html>
   `);
   printWindow.document.close();
   printWindow.focus();
-  printWindow.print();
+  printWindow.setTimeout(() => printWindow.print(), 250);
 }
 
 function exitEditor() {
@@ -3217,6 +3370,11 @@ root.addEventListener("click", (event) => {
 
   if (action === "print-responses") {
     printSavedResponses();
+    return;
+  }
+
+  if (action === "delete-response") {
+    deleteSavedResponse(actionTarget.dataset.responseId);
     return;
   }
 
