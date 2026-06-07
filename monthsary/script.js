@@ -19,6 +19,7 @@ let gameRevealTimeoutId = null;
 let audioContext = null;
 let ambientOscillator = null;
 let ambientGain = null;
+let surpriseAudio = null;
 
 const state = {
   screen: loadSavedExperienceState() === "keepsake" ? "keepsake" : "game",
@@ -58,6 +59,7 @@ const state = {
     open: false,
     index: 0,
     startX: null,
+    direction: "",
   },
 };
 
@@ -390,6 +392,7 @@ async function loadHostedContent() {
 
     if (payload.content) {
       activeContent = normalizeContent(payload.content);
+      resetGameState();
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(activeContent));
       } catch (error) {
@@ -1138,7 +1141,7 @@ function renderLetter() {
   `;
 }
 
-function renderMemoryMedia(item) {
+function renderMemoryMedia(item, galleryIndex) {
   const mediaItems = normalizeGalleryMedia(item);
 
   if (!mediaItems.length) {
@@ -1148,7 +1151,7 @@ function renderMemoryMedia(item) {
   return `
     <div class="memory-media-grid ${mediaItems.length === 1 ? "is-single" : ""}">
       ${mediaItems
-        .map((mediaItem) =>
+        .map((mediaItem, mediaIndex) =>
           mediaItem.type === "video"
             ? `
               <video
@@ -1157,15 +1160,21 @@ function renderMemoryMedia(item) {
                 controls
                 playsinline
                 preload="metadata"
+                data-action="open-memory-preview"
+                data-gallery-index="${galleryIndex}"
+                data-media-index="${mediaIndex}"
               ></video>
             `
             : `
               <img
                 class="memory-media memory-photo"
                 src="${escapeHtml(mediaItem.src)}"
-                alt="${escapeHtml(mediaItem.caption || item.title || "Memory photo")}"
+                alt="${escapeHtml(mediaItem.caption || item.title || "Memory photo") }"
                 loading="lazy"
                 data-memory-photo="true"
+                data-action="open-memory-preview"
+                data-gallery-index="${galleryIndex}"
+                data-media-index="${mediaIndex}"
               />
             `
         )
@@ -1203,13 +1212,19 @@ function renderMemoryGallery() {
   `;
 }
 
+function looksLikeFilename(text) {
+  return /\b[^\/\\]+\.(?:png|jpe?g|gif|webp|mp4|mov|m4v|avi|svg|jpeg|jpg|heic)\b/i.test(text);
+}
+
 function getMemoryPreviewItems() {
-  return (activeContent.gallery?.items || []).flatMap((item) =>
+  return (activeContent.gallery?.items || []).flatMap((item, itemIndex) =>
     normalizeGalleryMedia(item).map((mediaItem) => ({
       type: mediaItem.type,
       src: mediaItem.src,
-      caption: mediaItem.caption || item.title || "",
+      mediaCaption: mediaItem.caption,
       title: item.title,
+      copy: item.copy,
+      memoryIndex: itemIndex,
     }))
   );
 }
@@ -1227,6 +1242,7 @@ function openMemoryPreview(galleryIndex, mediaIndex) {
   state.memoryPreview.open = true;
   state.memoryPreview.index = Math.max(0, Math.min(flatIndex, getMemoryPreviewItems().length - 1));
   state.memoryPreview.startX = null;
+  state.memoryPreview.direction = "";
   renderApp();
 }
 
@@ -1243,6 +1259,7 @@ function showNextMemoryPreview() {
     return;
   }
 
+  state.memoryPreview.direction = "next";
   state.memoryPreview.index = (state.memoryPreview.index + 1) % items.length;
   renderApp();
 }
@@ -1253,6 +1270,7 @@ function showPrevMemoryPreview() {
     return;
   }
 
+  state.memoryPreview.direction = "prev";
   state.memoryPreview.index =
     (state.memoryPreview.index - 1 + items.length) % items.length;
   renderApp();
@@ -1265,21 +1283,30 @@ function renderMemoryPreviewOverlay() {
 
   const previewItems = getMemoryPreviewItems();
   const item = previewItems[state.memoryPreview.index] || {};
-  const caption = item.caption || item.title || "Memory preview";
+  const memoryNumber = typeof item.memoryIndex === "number" ? item.memoryIndex + 1 : state.memoryPreview.index + 1;
+  const mediaDirectionClass = state.memoryPreview.direction
+    ? ` memory-preview-media--${state.memoryPreview.direction}`
+    : "";
+
+  const caption = !looksLikeFilename(item.mediaCaption)
+    ? item.mediaCaption || ""
+    : "";
+
+  const footerText = item.title || item.copy || caption || "";
 
   return `
     <div class="memory-preview-overlay" data-action="close-memory-preview">
       <div class="memory-preview-card">
         <button class="memory-preview-close" type="button" data-action="close-memory-preview" aria-label="Close preview">×</button>
-        <div class="memory-preview-prompt">Swipe left or right to see more memories. Tap outside to close.</div>
-        <div class="memory-preview-media">
+        <div class="memory-preview-topline">Memory ${memoryNumber}</div>
+        <div class="memory-preview-media${mediaDirectionClass}">
           ${item.type === "video"
             ? `<video class="memory-preview-video" src="${escapeHtml(item.src)}" controls autoplay muted playsinline></video>`
             : `<img class="memory-preview-photo" src="${escapeHtml(item.src)}" alt="${escapeHtml(caption)}" />`
           }
         </div>
         <div class="memory-preview-caption">
-          <p>${escapeHtml(caption)}</p>
+          ${footerText ? `<p>${escapeHtml(footerText)}</p>` : ""}
           <span>${state.memoryPreview.index + 1} / ${previewItems.length}</span>
         </div>
         <button class="memory-preview-nav memory-preview-prev" type="button" data-action="prev-memory-preview" aria-label="Previous memory">‹</button>
@@ -2209,11 +2236,59 @@ function stopAmbientMusic() {
   ambientGain = null;
 }
 
+function createSurpriseAudio() {
+  if (surpriseAudio) {
+    return surpriseAudio;
+  }
+
+  const audioSrc = new URL("./Piano Petals.mp3", window.location.href).toString();
+  surpriseAudio = new Audio(audioSrc);
+  surpriseAudio.autoplay = false;
+  surpriseAudio.muted = false;
+  surpriseAudio.loop = true;
+  surpriseAudio.volume = 0.5;
+  surpriseAudio.preload = "auto";
+  surpriseAudio.crossOrigin = "anonymous";
+
+  surpriseAudio.addEventListener("error", () => {
+    console.warn("Surprise music failed to load from:", audioSrc);
+  });
+
+  return surpriseAudio;
+}
+
+async function playSurpriseMusic() {
+  const audio = createSurpriseAudio();
+
+  if (!audio) {
+    return;
+  }
+
+  audio.volume = 0.5;
+  audio.loop = true;
+  audio.muted = false;
+
+  try {
+    await audio.play();
+  } catch (error) {
+    console.warn("Unable to play surprise music:", error);
+  }
+}
+
+function stopSurpriseMusic() {
+  if (!surpriseAudio) {
+    return;
+  }
+
+  surpriseAudio.pause();
+  surpriseAudio.currentTime = 0;
+}
+
 function syncAmbientMusic() {
-  if (state.musicOn) {
-    startAmbientMusic();
+  if (state.musicOn && state.envelopeOpen) {
+    playSurpriseMusic();
   } else {
-    stopAmbientMusic();
+    stopSurpriseMusic();
   }
 }
 
@@ -2486,6 +2561,13 @@ function goToNextQuestion() {
 
 function toggleEnvelope() {
   state.envelopeOpen = !state.envelopeOpen;
+  if (state.envelopeOpen) {
+    state.musicOn = true;
+    saveMusicPreference();
+    playSurpriseMusic();
+  } else {
+    stopSurpriseMusic();
+  }
   renderApp();
 }
 
@@ -3020,6 +3102,7 @@ async function saveEditorChanges() {
     }
 
     activeContent = result.content;
+    resetGameState();
     let localSaveWarning = "";
     let onlineSaveError = "";
 
