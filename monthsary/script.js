@@ -1595,7 +1595,7 @@ function renderSavedResponsesPanel() {
             data-action="print-responses"
             ${state.savedResponses.length ? "" : "disabled"}
           >
-            Print
+            Print responses
           </button>
         </div>
       </div>
@@ -1776,6 +1776,9 @@ function renderEditorPanel() {
               <p class="editor-card-kicker">Envelope content</p>
               <h2 class="editor-section-title">Final letter</h2>
             </div>
+            <button class="secondary-button" type="button" data-action="print-letter-card">
+              Print letter card
+            </button>
           </div>
 
           <div class="editor-grid">
@@ -3223,6 +3226,253 @@ function printSavedResponses() {
   printWindow.setTimeout(() => printWindow.print(), 250);
 }
 
+function getDraftLetterForPrint() {
+  const draft = state.editorDraft;
+
+  if (!draft) {
+    return {
+      title: activeContent.letter.title,
+      signoff: activeContent.letter.signoff,
+      paragraphs: activeContent.letter.paragraphs,
+    };
+  }
+
+  return {
+    title: cleanText(draft.letterTitle, activeContent.letter.title).trim() || activeContent.letter.title,
+    signoff:
+      cleanText(draft.letterSignoff, activeContent.letter.signoff).trim() ||
+      activeContent.letter.signoff,
+    paragraphs: String(draft.letterParagraphsText || "")
+      .split(/\n\s*\n/)
+      .map((paragraph) => paragraph.trim())
+      .filter(Boolean),
+  };
+}
+
+function printLetterCard() {
+  const letter = getDraftLetterForPrint();
+
+  if (!letter.paragraphs.length) {
+    state.editorStatus = "Add at least one letter paragraph before printing the card.";
+    state.editorStatusType = "error";
+    renderApp();
+    return;
+  }
+
+  const printWindow = window.open("", "_blank", "width=1000,height=760");
+
+  if (!printWindow) {
+    state.editorStatus = "Pop-up was blocked. Allow pop-ups to print the letter card.";
+    state.editorStatusType = "error";
+    renderApp();
+    return;
+  }
+
+  const paragraphMarkup = letter.paragraphs
+    .map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`)
+    .join("");
+
+  printWindow.document.write(`
+    <!doctype html>
+    <html>
+      <head>
+        <title>Printable Letter Card</title>
+        <style>
+          @page { size: A4 landscape; margin: 10mm; }
+          * { box-sizing: border-box; }
+          body {
+            margin: 0;
+            font-family: Georgia, "Times New Roman", serif;
+            color: #2a1821;
+            background: #ffffff;
+          }
+          .print-note {
+            display: none;
+          }
+          .card-sheet {
+            position: relative;
+            width: 277mm;
+            min-height: 190mm;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0;
+            page-break-after: always;
+            break-after: page;
+            overflow: hidden;
+            background: #c9b2de;
+            border-radius: 3mm;
+          }
+          .card-sheet:last-child {
+            page-break-after: auto;
+            break-after: auto;
+          }
+          .card-panel {
+            position: relative;
+            min-height: 190mm;
+            padding: 16mm;
+            display: grid;
+            align-content: center;
+            overflow: hidden;
+          }
+          .card-panel::before {
+            content: "";
+            position: absolute;
+            inset: 7mm;
+            border: 1px dashed rgba(255, 255, 255, 0.85);
+            pointer-events: none;
+          }
+          .fold-line {
+            position: absolute;
+            inset: 0 auto 0 50%;
+            border-left: 1.5px dashed rgba(88, 49, 116, 0.85);
+            z-index: 5;
+          }
+          .outside-back {
+            background: linear-gradient(145deg, #cbb7e4, #b99fd6);
+            text-align: center;
+          }
+          .outside-front {
+            background:
+              radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.48), transparent 28%),
+              linear-gradient(145deg, #d9c8ee, #bba0d9);
+            text-align: center;
+          }
+          .inside-left {
+            background:
+              radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.5), transparent 26%),
+              linear-gradient(145deg, #e8dbf5, #c9b2de);
+          }
+          .inside-letter {
+            background:
+              radial-gradient(circle at 85% 15%, rgba(255, 255, 255, 0.55), transparent 24%),
+              linear-gradient(145deg, #f8f1ff, #dfcdef);
+            align-content: start;
+          }
+          .cover-message {
+            max-width: 95mm;
+            margin: 0 auto;
+            padding: 13mm 10mm;
+            border-radius: 8mm;
+            background: rgba(255, 255, 255, 0.58);
+            box-shadow: 0 10mm 24mm rgba(70, 39, 92, 0.18);
+          }
+          .cover-message p,
+          .from-line,
+          .fold-help {
+            margin: 0;
+            font: 700 15pt/1.35 Georgia, "Times New Roman", serif;
+          }
+          .from-line {
+            font-size: 12pt;
+            color: #ffffff;
+            text-shadow: 0 1px 2px rgba(54, 31, 73, 0.28);
+          }
+          .fold-help {
+            font-size: 11pt;
+            color: rgba(255, 255, 255, 0.92);
+          }
+          .letter-box {
+            position: relative;
+            max-width: 112mm;
+            margin: 0 auto;
+            padding: 11mm;
+            border-radius: 8mm;
+            background: rgba(255, 255, 255, 0.72);
+            box-shadow: 0 10mm 24mm rgba(70, 39, 92, 0.15);
+          }
+          .letter-box h1 {
+            margin: 0 0 6mm;
+            font-size: 21pt;
+            line-height: 1.05;
+          }
+          .letter-box p {
+            margin: 0 0 4mm;
+            font-size: 10.5pt;
+            line-height: 1.35;
+          }
+          .letter-box .signoff {
+            margin-top: 6mm;
+            text-align: right;
+            font-weight: 700;
+          }
+          .ribbon {
+            position: absolute;
+            inset: 50% auto auto 0;
+            width: 100%;
+            height: 6mm;
+            background: rgba(132, 103, 168, 0.42);
+            transform: translateY(-50%);
+          }
+          .ribbon.vertical {
+            inset: 0 auto auto 18%;
+            width: 6mm;
+            height: 100%;
+            transform: none;
+          }
+          @media screen {
+            body {
+              background: #2d2432;
+              padding: 24px;
+            }
+            .print-note {
+              display: block;
+              max-width: 277mm;
+              margin: 0 auto 16px;
+              padding: 12px 14px;
+              border-radius: 10px;
+              background: #fff;
+              font: 14px Arial, sans-serif;
+              color: #33233a;
+            }
+            .card-sheet {
+              margin: 0 auto 24px;
+              box-shadow: 0 18px 60px rgba(0, 0, 0, 0.32);
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="print-note">
+          Print at 100% scale on A4 landscape. Page 1 is the outside, page 2 is the inside.
+          Fold along the dashed center line. Duplex printing may need short-edge flip depending on the printer.
+        </div>
+
+        <section class="card-sheet outside-sheet">
+          <div class="fold-line" aria-hidden="true"></div>
+          <div class="card-panel outside-back">
+            <p class="from-line">from: ${escapeHtml(activeContent.brandLabel || "me")}</p>
+          </div>
+          <div class="card-panel outside-front">
+            <span class="ribbon" aria-hidden="true"></span>
+            <span class="ribbon vertical" aria-hidden="true"></span>
+            <div class="cover-message">
+              <p>Remember the girl I made this little site for?</p>
+              <p>Turns out... that was you.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="card-sheet inside-sheet">
+          <div class="fold-line" aria-hidden="true"></div>
+          <div class="card-panel inside-left">
+            <p class="fold-help">A little letter, made to be folded and kept.</p>
+          </div>
+          <div class="card-panel inside-letter">
+            <div class="letter-box">
+              <h1>${escapeHtml(letter.title)}</h1>
+              ${paragraphMarkup}
+              <p class="signoff">${escapeHtml(letter.signoff)}</p>
+            </div>
+          </div>
+        </section>
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+  printWindow.focus();
+  printWindow.setTimeout(() => printWindow.print(), 250);
+}
+
 function exitEditor() {
   state.screen = "game";
   state.editorDraft = null;
@@ -3370,6 +3620,11 @@ root.addEventListener("click", (event) => {
 
   if (action === "print-responses") {
     printSavedResponses();
+    return;
+  }
+
+  if (action === "print-letter-card") {
+    printLetterCard();
     return;
   }
 
