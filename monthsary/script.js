@@ -3333,7 +3333,7 @@ function printLetterCard() {
           }
           .card-sheet {
             position: relative;
-            width: 277mm;
+            width: 148.5mm;
             min-height: 190mm;
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -3343,6 +3343,7 @@ function printLetterCard() {
             overflow: hidden;
             background: #c9b2de;
             border-radius: 3mm;
+            margin: 0 auto;
           }
           .card-sheet:last-child {
             page-break-after: auto;
@@ -3458,7 +3459,7 @@ function printLetterCard() {
             }
             .print-note {
               display: block;
-              max-width: 277mm;
+              max-width: 148.5mm;
               margin: 0 auto 16px;
               padding: 12px 14px;
               border-radius: 10px;
