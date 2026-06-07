@@ -6,7 +6,7 @@ const MAX_GALLERY_UPLOAD_BYTES = 8 * 1024 * 1024;
 const MAX_GALLERY_PHOTO_DATA_URL_BYTES = 900 * 1024;
 const MAX_GALLERY_PHOTO_DIMENSION = 1400;
 const MAX_GALLERY_VIDEO_UPLOAD_BYTES = 25 * 1024 * 1024;
-const MAX_GALLERY_VIDEO_DATA_URL_BYTES = 2 * 1024 * 1024;
+const MAX_GALLERY_VIDEO_DATA_URL_BYTES = 4 * 1024 * 1024;
 const MAX_GALLERY_VIDEO_DIMENSION = 720;
 const MAX_GALLERY_VIDEO_SECONDS = 12;
 const root = document.getElementById("app");
@@ -189,8 +189,17 @@ function normalizeGalleryMedia(item) {
 
   if (Array.isArray(item?.media)) {
     item.media.forEach((mediaItem) => {
-      const src = cleanText(mediaItem?.src, "").trim();
-      const type = mediaItem?.type === "video" ? "video" : "image";
+      let src = "";
+      let type = "image";
+      let caption = "";
+
+      if (typeof mediaItem === "string") {
+        src = mediaItem.trim();
+      } else if (mediaItem && typeof mediaItem === "object") {
+        src = cleanText(mediaItem?.src, "").trim();
+        type = mediaItem?.type === "video" ? "video" : "image";
+        caption = cleanText(mediaItem?.caption, "").trim();
+      }
 
       if (!src) {
         return;
@@ -199,7 +208,7 @@ function normalizeGalleryMedia(item) {
       media.push({
         type,
         src,
-        caption: cleanText(mediaItem?.caption, "").trim(),
+        caption,
       });
     });
   }
@@ -2616,66 +2625,78 @@ async function optimizeVideoDataUrl(file) {
     throw new Error("This browser cannot compress that video. Try a shorter clip or a hosted video link.");
   }
 
-  const video = await loadVideoFromDataUrl(originalDataUrl);
-  const scale = Math.min(
-    1,
-    MAX_GALLERY_VIDEO_DIMENSION / Math.max(video.videoWidth, video.videoHeight)
-  );
-  const width = Math.max(1, Math.round(video.videoWidth * scale));
-  const height = Math.max(1, Math.round(video.videoHeight * scale));
-  const canvas = document.createElement("canvas");
-  const context = canvas.getContext("2d");
+  try {
+    const video = await loadVideoFromDataUrl(originalDataUrl);
+    const scale = Math.min(
+      1,
+      MAX_GALLERY_VIDEO_DIMENSION / Math.max(video.videoWidth, video.videoHeight)
+    );
+    const width = Math.max(1, Math.round(video.videoWidth * scale));
+    const height = Math.max(1, Math.round(video.videoHeight * scale));
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
 
-  if (!context) {
-    throw new Error("This browser cannot compress that video.");
-  }
-
-  canvas.width = width;
-  canvas.height = height;
-
-  const stream = canvas.captureStream(12);
-  const chunks = [];
-  const recorder = new MediaRecorder(stream, {
-    mimeType,
-    videoBitsPerSecond: 450000,
-  });
-  const durationLimit = Math.min(video.duration || MAX_GALLERY_VIDEO_SECONDS, MAX_GALLERY_VIDEO_SECONDS);
-
-  recorder.ondataavailable = (event) => {
-    if (event.data?.size) {
-      chunks.push(event.data);
-    }
-  };
-
-  const finished = new Promise((resolve, reject) => {
-    recorder.onstop = resolve;
-    recorder.onerror = () => reject(new Error("The video could not be compressed."));
-  });
-
-  const drawFrame = () => {
-    if (video.paused || video.ended || video.currentTime >= durationLimit) {
-      recorder.stop();
-      return;
+    if (!context) {
+      throw new Error("This browser cannot compress that video.");
     }
 
-    context.drawImage(video, 0, 0, width, height);
-    requestAnimationFrame(drawFrame);
-  };
+    canvas.width = width;
+    canvas.height = height;
 
-  recorder.start(250);
-  video.currentTime = 0;
-  await video.play();
-  drawFrame();
-  await finished;
+    const stream = canvas.captureStream(12);
+    const chunks = [];
+    const recorder = new MediaRecorder(stream, {
+      mimeType,
+      videoBitsPerSecond: 450000,
+    });
+    const durationLimit = Math.min(video.duration || MAX_GALLERY_VIDEO_SECONDS, MAX_GALLERY_VIDEO_SECONDS);
 
-  const blob = new Blob(chunks, { type: mimeType });
-  const dataUrl = await blobToDataUrl(blob);
+    recorder.ondataavailable = (event) => {
+      if (event.data?.size) {
+        chunks.push(event.data);
+      }
+    };
 
-  if (getDataUrlByteSize(dataUrl) <= MAX_GALLERY_VIDEO_DATA_URL_BYTES) {
-    return dataUrl;
+    const finished = new Promise((resolve, reject) => {
+      recorder.onstop = resolve;
+      recorder.onerror = () => reject(new Error("The video could not be compressed."));
+    });
+
+    const drawFrame = () => {
+      if (video.paused || video.ended || video.currentTime >= durationLimit) {
+        recorder.stop();
+        return;
+      }
+
+      context.drawImage(video, 0, 0, width, height);
+      requestAnimationFrame(drawFrame);
+    };
+
+    recorder.start(250);
+    video.currentTime = 0;
+    await video.play();
+    drawFrame();
+    await finished;
+
+    const blob = new Blob(chunks, { type: mimeType });
+    const dataUrl = await blobToDataUrl(blob);
+
+    if (getDataUrlByteSize(dataUrl) <= MAX_GALLERY_VIDEO_DATA_URL_BYTES) {
+      return dataUrl;
+    }
+
+    if (getDataUrlByteSize(originalDataUrl) <= MAX_GALLERY_VIDEO_DATA_URL_BYTES) {
+      return originalDataUrl;
+    }
+
+    throw new Error("That video is still too large after compression. Try a shorter clip.");
+  } catch (error) {
+    if (getDataUrlByteSize(originalDataUrl) <= MAX_GALLERY_VIDEO_DATA_URL_BYTES) {
+      return originalDataUrl;
+    }
+
+    throw error;
   }
-
-  throw new Error("That video is still too large after compression. Try a shorter clip.");
 }
 
 async function optimizeGalleryMediaFile(file) {
