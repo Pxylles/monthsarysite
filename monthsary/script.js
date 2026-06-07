@@ -20,6 +20,7 @@ let audioContext = null;
 let ambientOscillator = null;
 let ambientGain = null;
 let surpriseAudio = null;
+let _pendingAudioUnmute = false;
 
 const state = {
   screen: loadSavedExperienceState() === "keepsake" ? "keepsake" : "game",
@@ -2001,6 +2002,10 @@ function renderApp() {
   } else if (state.screen === "reveal") {
     screenMarkup = renderRevealScreen();
   } else if (state.screen === "keepsake") {
+    // Ensure keepsake shows the opened envelope and music plays when appropriate
+    if (!state.envelopeOpen) {
+      state.envelopeOpen = true;
+    }
     screenMarkup = renderKeepsakeScreen();
   } else if (state.screen === "lock") {
     screenMarkup = renderLockScreen();
@@ -2023,6 +2028,11 @@ function renderApp() {
     </div>
     ${renderMemoryPreviewOverlay()}
   `;
+
+  // After DOM is updated, ensure audio state matches the current screen
+  if (state.screen === "keepsake") {
+    syncAmbientMusic();
+  }
 
   syncScreenInputs();
   initializeGoogleOwnerButton();
@@ -2260,6 +2270,57 @@ function createSurpriseAudio() {
   return surpriseAudio;
 }
 
+function _onFirstUserGestureForAudio() {
+  function once() {
+    if (!surpriseAudio) return;
+    try {
+      surpriseAudio.muted = false;
+      surpriseAudio.volume = 0.5;
+      surpriseAudio.play().catch(() => {});
+    } catch (e) {
+      // ignore
+    }
+    _pendingAudioUnmute = false;
+    window.removeEventListener("pointerdown", once);
+    window.removeEventListener("touchstart", once);
+    window.removeEventListener("click", once);
+  }
+
+  window.addEventListener("pointerdown", once, { once: true });
+  window.addEventListener("touchstart", once, { once: true });
+  window.addEventListener("click", once, { once: true });
+}
+
+async function attemptAutoplaySurprise() {
+  const audio = createSurpriseAudio();
+  if (!audio) return;
+
+  audio.loop = true;
+  audio.volume = 0.5;
+  audio.muted = false;
+
+  try {
+    await audio.play();
+    // played successfully
+    return;
+  } catch (err) {
+    // Try muted autoplay (allowed in many browsers)
+    try {
+      audio.muted = true;
+      audio.volume = 0;
+      await audio.play();
+      // schedule unmute on first user gesture
+      _pendingAudioUnmute = true;
+      _onFirstUserGestureForAudio();
+      return;
+    } catch (err2) {
+      // Could not autoplay even muted; wait for user gesture to play
+      _pendingAudioUnmute = true;
+      _onFirstUserGestureForAudio();
+    }
+  }
+}
+
 async function playSurpriseMusic() {
   const audio = createSurpriseAudio();
 
@@ -2316,7 +2377,6 @@ function stopSurpriseMusic() {
   }
 
   surpriseAudio.pause();
-  surpriseAudio.currentTime = 0;
 }
 
 function syncAmbientMusic() {
@@ -2599,6 +2659,7 @@ function toggleEnvelope() {
   if (state.envelopeOpen) {
     state.musicOn = true;
     saveMusicPreference();
+    syncAmbientMusic();
   } else {
     stopSurpriseMusic();
     state.musicOn = false;
@@ -4057,7 +4118,7 @@ root.addEventListener("pointerdown", (event) => {
     return;
   }
 
-  if (!event.target.closest(".memory-preview-overlay")) {
+  if (!event.target.closest(".memory-preview-card")) {
     return;
   }
 
@@ -4068,12 +4129,6 @@ root.addEventListener("pointerup", (event) => {
   if (!state.memoryPreview.open || state.memoryPreview.startX === null) {
     return;
   }
-
-  const overlay = event.target.closest(".memory-preview-overlay");
-  if (!overlay) {
-    return;
-  }
-
   const deltaX = event.clientX - state.memoryPreview.startX;
   state.memoryPreview.startX = null;
 
@@ -4087,6 +4142,37 @@ root.addEventListener("pointerup", (event) => {
     showPrevMemoryPreview();
   }
 });
+
+root.addEventListener("pointercancel", () => {
+  state.memoryPreview.startX = null;
+});
+
+// Touch fallback for browsers that don't fully support Pointer Events
+if (!window.PointerEvent) {
+  root.addEventListener("touchstart", (event) => {
+    if (!state.memoryPreview.open) return;
+    const touch = event.touches[0];
+    if (!touch) return;
+    const target = event.target;
+    if (!target || !target.closest || !target.closest(".memory-preview-card")) return;
+    state.memoryPreview.startX = touch.clientX;
+  });
+
+  root.addEventListener("touchend", (event) => {
+    if (!state.memoryPreview.open || state.memoryPreview.startX === null) return;
+    const touch = event.changedTouches[0];
+    if (!touch) return;
+    const deltaX = touch.clientX - state.memoryPreview.startX;
+    state.memoryPreview.startX = null;
+    if (Math.abs(deltaX) < 50) return;
+    if (deltaX < 0) showNextMemoryPreview();
+    else showPrevMemoryPreview();
+  });
+
+  root.addEventListener("touchcancel", () => {
+    state.memoryPreview.startX = null;
+  });
+}
 
 root.addEventListener(
   "error",
