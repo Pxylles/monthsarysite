@@ -54,6 +54,11 @@ const state = {
   theme: loadSavedTheme(),
   musicOn: loadSavedMusicPreference(),
   game: createInitialGameState(activeContent.game?.rounds),
+  memoryPreview: {
+    open: false,
+    index: 0,
+    startX: null,
+  },
 };
 
 function createInitialGameState(totalRounds = 3) {
@@ -1185,7 +1190,7 @@ function renderMemoryGallery() {
           .map(
             (item, index) => `
               <article class="memory-card">
-                ${renderMemoryMedia(item)}
+                ${renderMemoryMedia(item, index)}
                 <span>${String(index + 1).padStart(2, "0")}</span>
                 <h3>${escapeHtml(item.title)}</h3>
                 <p>${escapeHtml(item.copy)}</p>
@@ -1195,6 +1200,92 @@ function renderMemoryGallery() {
           .join("")}
       </div>
     </section>
+  `;
+}
+
+function getMemoryPreviewItems() {
+  return (activeContent.gallery?.items || []).flatMap((item) =>
+    normalizeGalleryMedia(item).map((mediaItem) => ({
+      type: mediaItem.type,
+      src: mediaItem.src,
+      caption: mediaItem.caption || item.title || "",
+      title: item.title,
+    }))
+  );
+}
+
+function openMemoryPreview(galleryIndex, mediaIndex) {
+  const galleryItems = activeContent.gallery?.items || [];
+  if (!galleryItems[galleryIndex]) {
+    return;
+  }
+
+  const flatIndex = galleryItems
+    .slice(0, galleryIndex)
+    .reduce((sum, item) => sum + normalizeGalleryMedia(item).length, 0) + mediaIndex;
+
+  state.memoryPreview.open = true;
+  state.memoryPreview.index = Math.max(0, Math.min(flatIndex, getMemoryPreviewItems().length - 1));
+  state.memoryPreview.startX = null;
+  renderApp();
+}
+
+function closeMemoryPreview() {
+  state.memoryPreview.open = false;
+  state.memoryPreview.index = 0;
+  state.memoryPreview.startX = null;
+  renderApp();
+}
+
+function showNextMemoryPreview() {
+  const items = getMemoryPreviewItems();
+  if (!items.length) {
+    return;
+  }
+
+  state.memoryPreview.index = (state.memoryPreview.index + 1) % items.length;
+  renderApp();
+}
+
+function showPrevMemoryPreview() {
+  const items = getMemoryPreviewItems();
+  if (!items.length) {
+    return;
+  }
+
+  state.memoryPreview.index =
+    (state.memoryPreview.index - 1 + items.length) % items.length;
+  renderApp();
+}
+
+function renderMemoryPreviewOverlay() {
+  if (!state.memoryPreview.open) {
+    return "";
+  }
+
+  const previewItems = getMemoryPreviewItems();
+  const item = previewItems[state.memoryPreview.index] || {};
+  const caption = item.caption || item.title || "Memory preview";
+
+  return `
+    <div class="memory-preview-overlay" data-action="close-memory-preview">
+      <div class="memory-preview-card">
+        <button class="memory-preview-close" type="button" data-action="close-memory-preview" aria-label="Close preview">×</button>
+        <div class="memory-preview-prompt">Swipe left or right to see more memories. Tap outside to close.</div>
+        <div class="memory-preview-media">
+          ${item.type === "video"
+            ? `<video class="memory-preview-video" src="${escapeHtml(item.src)}" controls autoplay muted playsinline></video>`
+            : `<img class="memory-preview-photo" src="${escapeHtml(item.src)}" alt="${escapeHtml(caption)}" />`
+          }
+        </div>
+        <div class="memory-preview-caption">
+          <p>${escapeHtml(caption)}</p>
+          <span>${state.memoryPreview.index + 1} / ${previewItems.length}</span>
+        </div>
+        <button class="memory-preview-nav memory-preview-prev" type="button" data-action="prev-memory-preview" aria-label="Previous memory">‹</button>
+        <button class="memory-preview-nav memory-preview-next" type="button" data-action="next-memory-preview" aria-label="Next memory">›</button>
+      </div>
+    </div>
   `;
 }
 
@@ -1903,6 +1994,7 @@ function renderApp() {
       ${topbarMarkup}
       ${screenMarkup}
     </div>
+    ${renderMemoryPreviewOverlay()}
   `;
 
   syncScreenInputs();
@@ -3341,13 +3433,17 @@ function printLetterCard() {
       <head>
         <title>Printable Letter Card</title>
         <style>
-          @page { size: A4 landscape; margin: 10mm; }
+          @page { size: A4 portrait; margin: 10mm; }
           * { box-sizing: border-box; }
           body {
             margin: 0;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
             font-family: Georgia, "Times New Roman", serif;
             color: #2a1821;
             background: #ffffff;
+            padding: 0;
           }
           .print-note {
             display: none;
@@ -3355,7 +3451,7 @@ function printLetterCard() {
           .card-sheet {
             position: relative;
             width: 148.5mm;
-            min-height: 190mm;
+            min-height: 210mm;
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 0;
@@ -3497,7 +3593,7 @@ function printLetterCard() {
       </head>
       <body>
         <div class="print-note">
-          Print at 100% scale on A4 landscape. Page 1 is the outside, page 2 is the inside.
+          Print at 100% scale on A4 portrait. Page 1 is the outside, page 2 is the inside.
           Fold along the dashed center line. Duplex printing may need short-edge flip depending on the printer.
         </div>
 
@@ -3692,6 +3788,31 @@ root.addEventListener("click", (event) => {
     return;
   }
 
+  if (action === "open-memory-preview") {
+    openMemoryPreview(
+      Number(actionTarget.dataset.galleryIndex),
+      Number(actionTarget.dataset.mediaIndex)
+    );
+    return;
+  }
+
+  if (action === "close-memory-preview") {
+    if (event.target === actionTarget) {
+      closeMemoryPreview();
+    }
+    return;
+  }
+
+  if (action === "next-memory-preview") {
+    showNextMemoryPreview();
+    return;
+  }
+
+  if (action === "prev-memory-preview") {
+    showPrevMemoryPreview();
+    return;
+  }
+
   if (action === "delete-response") {
     deleteSavedResponse(actionTarget.dataset.responseId);
     return;
@@ -3809,6 +3930,42 @@ root.addEventListener("change", (event) => {
     }
 
     renderApp();
+  }
+});
+
+root.addEventListener("pointerdown", (event) => {
+  if (!state.memoryPreview.open) {
+    return;
+  }
+
+  if (!event.target.closest(".memory-preview-overlay")) {
+    return;
+  }
+
+  state.memoryPreview.startX = event.clientX;
+});
+
+root.addEventListener("pointerup", (event) => {
+  if (!state.memoryPreview.open || state.memoryPreview.startX === null) {
+    return;
+  }
+
+  const overlay = event.target.closest(".memory-preview-overlay");
+  if (!overlay) {
+    return;
+  }
+
+  const deltaX = event.clientX - state.memoryPreview.startX;
+  state.memoryPreview.startX = null;
+
+  if (Math.abs(deltaX) < 50) {
+    return;
+  }
+
+  if (deltaX < 0) {
+    showNextMemoryPreview();
+  } else {
+    showPrevMemoryPreview();
   }
 });
 
