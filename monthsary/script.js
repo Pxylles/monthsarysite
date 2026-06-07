@@ -2060,6 +2060,9 @@ function unlockVisitorView() {
   state.lockError = "";
   state.codeInput = "";
   state.screen = "intro";
+  state.musicOn = true;
+  saveMusicPreference();
+  fadeInSurpriseMusic();
   renderApp();
 }
 
@@ -2273,6 +2276,38 @@ async function playSurpriseMusic() {
   } catch (error) {
     console.warn("Unable to play surprise music:", error);
   }
+}
+
+async function fadeInSurpriseMusic(duration = 1500) {
+  const audio = createSurpriseAudio();
+
+  if (!audio) {
+    return;
+  }
+
+  audio.loop = true;
+  audio.muted = false;
+  audio.volume = 0;
+
+  try {
+    await audio.play();
+  } catch (error) {
+    console.warn("Unable to play surprise music:", error);
+    return;
+  }
+
+  const startTime = Date.now();
+  const targetVolume = 0.5;
+
+  const fadeInterval = setInterval(() => {
+    const elapsed = Date.now() - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    audio.volume = progress * targetVolume;
+
+    if (progress >= 1) {
+      clearInterval(fadeInterval);
+    }
+  }, 50);
 }
 
 function stopSurpriseMusic() {
@@ -2564,9 +2599,10 @@ function toggleEnvelope() {
   if (state.envelopeOpen) {
     state.musicOn = true;
     saveMusicPreference();
-    playSurpriseMusic();
   } else {
     stopSurpriseMusic();
+    state.musicOn = false;
+    saveMusicPreference();
   }
   renderApp();
 }
