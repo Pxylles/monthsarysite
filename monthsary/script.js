@@ -5,6 +5,10 @@ const EXPERIENCE_STORAGE_KEY = "monthsary-site-experience-v1";
 const MAX_GALLERY_UPLOAD_BYTES = 8 * 1024 * 1024;
 const MAX_GALLERY_PHOTO_DATA_URL_BYTES = 900 * 1024;
 const MAX_GALLERY_PHOTO_DIMENSION = 1400;
+const MAX_GALLERY_VIDEO_UPLOAD_BYTES = 25 * 1024 * 1024;
+const MAX_GALLERY_VIDEO_DATA_URL_BYTES = 2 * 1024 * 1024;
+const MAX_GALLERY_VIDEO_DIMENSION = 720;
+const MAX_GALLERY_VIDEO_SECONDS = 12;
 const root = document.getElementById("app");
 const defaultSiteContent = window.defaultSiteContent;
 
@@ -178,6 +182,39 @@ function normalizeQuestion(question, index) {
   };
 }
 
+function normalizeGalleryMedia(item) {
+  const media = [];
+
+  if (Array.isArray(item?.media)) {
+    item.media.forEach((mediaItem) => {
+      const src = cleanText(mediaItem?.src, "").trim();
+      const type = mediaItem?.type === "video" ? "video" : "image";
+
+      if (!src) {
+        return;
+      }
+
+      media.push({
+        type,
+        src,
+        caption: cleanText(mediaItem?.caption, "").trim(),
+      });
+    });
+  }
+
+  const legacyPhotoUrl = cleanText(item?.photoUrl, "").trim();
+
+  if (legacyPhotoUrl && !media.some((mediaItem) => mediaItem.src === legacyPhotoUrl)) {
+    media.unshift({
+      type: "image",
+      src: legacyPhotoUrl,
+      caption: "",
+    });
+  }
+
+  return media.slice(0, 8);
+}
+
 function normalizeContent(candidate) {
   const base = deepClone(defaultContent);
   const source = candidate && typeof candidate === "object" ? candidate : {};
@@ -211,8 +248,9 @@ function normalizeContent(candidate) {
             title: cleanText(item?.title, ""),
             copy: cleanText(item?.copy, ""),
             photoUrl: cleanText(item?.photoUrl, ""),
+            media: normalizeGalleryMedia(item),
           }))
-          .filter((item) => item.title || item.copy || item.photoUrl)
+          .filter((item) => item.title || item.copy || item.photoUrl || item.media.length)
       : base.gallery?.items || [],
   };
 
@@ -567,6 +605,7 @@ function createEditorDraft(source = activeContent) {
       title: item.title || "",
       copy: item.copy || "",
       photoUrl: item.photoUrl || "",
+      media: normalizeGalleryMedia(item),
     })),
     questions: source.questions.map((question) => ({
       id: question.id,
@@ -1077,6 +1116,42 @@ function renderLetter() {
   `;
 }
 
+function renderMemoryMedia(item) {
+  const mediaItems = normalizeGalleryMedia(item);
+
+  if (!mediaItems.length) {
+    return "";
+  }
+
+  return `
+    <div class="memory-media-grid ${mediaItems.length === 1 ? "is-single" : ""}">
+      ${mediaItems
+        .map((mediaItem) =>
+          mediaItem.type === "video"
+            ? `
+              <video
+                class="memory-media memory-video"
+                src="${escapeHtml(mediaItem.src)}"
+                controls
+                playsinline
+                preload="metadata"
+              ></video>
+            `
+            : `
+              <img
+                class="memory-media memory-photo"
+                src="${escapeHtml(mediaItem.src)}"
+                alt="${escapeHtml(mediaItem.caption || item.title || "Memory photo")}"
+                loading="lazy"
+                data-memory-photo="true"
+              />
+            `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
 function renderMemoryGallery() {
   const gallery = activeContent.gallery;
 
@@ -1093,19 +1168,7 @@ function renderMemoryGallery() {
           .map(
             (item, index) => `
               <article class="memory-card">
-                ${
-                  item.photoUrl
-                    ? `
-                      <img
-                        class="memory-photo"
-                        src="${escapeHtml(item.photoUrl)}"
-                        alt="${escapeHtml(item.title || "Memory photo")}"
-                        loading="lazy"
-                        data-memory-photo="true"
-                      />
-                    `
-                    : ""
-                }
+                ${renderMemoryMedia(item)}
                 <span>${String(index + 1).padStart(2, "0")}</span>
                 <h3>${escapeHtml(item.title)}</h3>
                 <p>${escapeHtml(item.copy)}</p>
@@ -1357,6 +1420,58 @@ function renderQuestionEditor(question, index) {
   `;
 }
 
+function renderGalleryMediaEditor(item, index) {
+  const mediaItems = normalizeGalleryMedia(item);
+
+  if (!mediaItems.length) {
+    return "";
+  }
+
+  return `
+    <div class="editor-field editor-field-full">
+      <span class="editor-label">Media preview</span>
+      <div class="editor-media-grid">
+        ${mediaItems
+          .map(
+            (mediaItem, mediaIndex) => `
+              <div class="editor-media-item">
+                ${
+                  mediaItem.type === "video"
+                    ? `
+                      <video
+                        class="editor-photo-preview"
+                        src="${escapeHtml(mediaItem.src)}"
+                        controls
+                        playsinline
+                        preload="metadata"
+                      ></video>
+                    `
+                    : `
+                      <img
+                        class="editor-photo-preview"
+                        src="${escapeHtml(mediaItem.src)}"
+                        alt="${escapeHtml(item.title || "Memory media preview")}"
+                      />
+                    `
+                }
+                <button
+                  class="tiny-button tiny-button-danger"
+                  type="button"
+                  data-action="remove-gallery-media"
+                  data-gallery-index="${index}"
+                  data-media-index="${mediaIndex}"
+                >
+                  Remove
+                </button>
+              </div>
+            `
+          )
+          .join("")}
+      </div>
+    </div>
+  `;
+}
+
 function renderGalleryItemEditor(item, index) {
   return `
     <article class="editor-question-card">
@@ -1388,7 +1503,7 @@ function renderGalleryItemEditor(item, index) {
         </label>
 
         <label class="editor-field editor-field-full">
-          <span class="editor-label">Photo URL</span>
+          <span class="editor-label">Fallback photo URL</span>
           <input
             class="editor-input"
             type="url"
@@ -1398,46 +1513,26 @@ function renderGalleryItemEditor(item, index) {
             placeholder="https://example.com/photo.jpg or ./photos/photo.jpg"
           />
           <span class="editor-help">
-            Use a hosted image link, or put an image in the project folder and reference it like ./photos/photo.jpg.
+            Optional. Uploaded media below can hold several compressed images or short videos.
           </span>
         </label>
 
         <label class="editor-field editor-field-full">
-          <span class="editor-label">Optional photo upload</span>
+          <span class="editor-label">Add images or short videos</span>
           <input
             class="editor-input file-input"
             type="file"
-            accept="image/*"
+            accept="image/*,video/*"
+            multiple
             data-gallery-index="${index}"
-            data-gallery-upload="photo"
+            data-gallery-upload="media"
           />
           <span class="editor-help">
-            This embeds the selected image into the memory card. Use smaller photos for faster loading.
+            Images are resized automatically. Videos are shortened/compressed for shared saving, so keep clips brief.
           </span>
         </label>
 
-        ${
-          item.photoUrl
-            ? `
-              <div class="editor-field editor-field-full">
-                <span class="editor-label">Photo preview</span>
-                <img
-                  class="editor-photo-preview"
-                  src="${escapeHtml(item.photoUrl)}"
-                  alt="${escapeHtml(item.title || "Memory photo preview")}"
-                />
-                <button
-                  class="tiny-button tiny-button-danger"
-                  type="button"
-                  data-action="clear-gallery-photo"
-                  data-gallery-index="${index}"
-                >
-                  Remove photo
-                </button>
-              </div>
-            `
-            : ""
-        }
+        ${renderGalleryMediaEditor(item, index)}
 
         <label class="editor-field editor-field-full">
           <span class="editor-label">Memory note</span>
@@ -2350,6 +2445,7 @@ function addGalleryItem() {
     title: "A new memory",
     copy: "Write what you want to remember here.",
     photoUrl: "",
+    media: [],
   });
   state.editorStatus = "Memory added. Save when the gallery looks right.";
   state.editorStatusType = "info";
@@ -2382,6 +2478,18 @@ function loadImageFromDataUrl(dataUrl) {
     image.onload = () => resolve(image);
     image.onerror = () => reject(new Error("The photo could not be prepared."));
     image.src = dataUrl;
+  });
+}
+
+function loadVideoFromDataUrl(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement("video");
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = "metadata";
+    video.onloadedmetadata = () => resolve(video);
+    video.onerror = () => reject(new Error("The video could not be prepared."));
+    video.src = dataUrl;
   });
 }
 
@@ -2425,51 +2533,186 @@ async function optimizeImageDataUrl(file) {
   throw new Error("That photo is still too large after resizing. Try a smaller image.");
 }
 
-async function uploadGalleryPhoto(index, file) {
-  const item = state.editorDraft?.galleryItems?.[index];
+function getSupportedVideoMimeType() {
+  if (!window.MediaRecorder) {
+    return "";
+  }
 
-  if (!item || !file) {
+  return [
+    "video/webm;codecs=vp9",
+    "video/webm;codecs=vp8",
+    "video/webm",
+  ].find((type) => MediaRecorder.isTypeSupported(type)) || "";
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("The compressed video could not be saved."));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function optimizeVideoDataUrl(file) {
+  const originalDataUrl = await readFileAsDataUrl(file);
+  const mimeType = getSupportedVideoMimeType();
+
+  if (!mimeType || !HTMLCanvasElement.prototype.captureStream) {
+    if (getDataUrlByteSize(originalDataUrl) <= MAX_GALLERY_VIDEO_DATA_URL_BYTES) {
+      return originalDataUrl;
+    }
+
+    throw new Error("This browser cannot compress that video. Try a shorter clip or a hosted video link.");
+  }
+
+  const video = await loadVideoFromDataUrl(originalDataUrl);
+  const scale = Math.min(
+    1,
+    MAX_GALLERY_VIDEO_DIMENSION / Math.max(video.videoWidth, video.videoHeight)
+  );
+  const width = Math.max(1, Math.round(video.videoWidth * scale));
+  const height = Math.max(1, Math.round(video.videoHeight * scale));
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    throw new Error("This browser cannot compress that video.");
+  }
+
+  canvas.width = width;
+  canvas.height = height;
+
+  const stream = canvas.captureStream(12);
+  const chunks = [];
+  const recorder = new MediaRecorder(stream, {
+    mimeType,
+    videoBitsPerSecond: 450000,
+  });
+  const durationLimit = Math.min(video.duration || MAX_GALLERY_VIDEO_SECONDS, MAX_GALLERY_VIDEO_SECONDS);
+
+  recorder.ondataavailable = (event) => {
+    if (event.data?.size) {
+      chunks.push(event.data);
+    }
+  };
+
+  const finished = new Promise((resolve, reject) => {
+    recorder.onstop = resolve;
+    recorder.onerror = () => reject(new Error("The video could not be compressed."));
+  });
+
+  const drawFrame = () => {
+    if (video.paused || video.ended || video.currentTime >= durationLimit) {
+      recorder.stop();
+      return;
+    }
+
+    context.drawImage(video, 0, 0, width, height);
+    requestAnimationFrame(drawFrame);
+  };
+
+  recorder.start(250);
+  video.currentTime = 0;
+  await video.play();
+  drawFrame();
+  await finished;
+
+  const blob = new Blob(chunks, { type: mimeType });
+  const dataUrl = await blobToDataUrl(blob);
+
+  if (getDataUrlByteSize(dataUrl) <= MAX_GALLERY_VIDEO_DATA_URL_BYTES) {
+    return dataUrl;
+  }
+
+  throw new Error("That video is still too large after compression. Try a shorter clip.");
+}
+
+async function optimizeGalleryMediaFile(file) {
+  if (file.type.startsWith("image/")) {
+    return {
+      type: "image",
+      src: await optimizeImageDataUrl(file),
+      caption: file.name || "",
+    };
+  }
+
+  if (file.type.startsWith("video/")) {
+    return {
+      type: "video",
+      src: await optimizeVideoDataUrl(file),
+      caption: file.name || "",
+    };
+  }
+
+  throw new Error("Choose image or video files for memory media.");
+}
+
+async function uploadGalleryMedia(index, files) {
+  const item = state.editorDraft?.galleryItems?.[index];
+  const selectedFiles = Array.from(files || []);
+
+  if (!item || !selectedFiles.length) {
     return;
   }
 
-  if (!file.type.startsWith("image/")) {
-    state.editorStatus = "Choose an image file for the memory photo.";
+  if (selectedFiles.length > 6) {
+    state.editorStatus = "Add up to 6 media files at a time.";
     state.editorStatusType = "error";
     renderApp();
     return;
   }
 
-  if (file.size > MAX_GALLERY_UPLOAD_BYTES) {
-    state.editorStatus = "That photo is too large. Use an image under 8 MB.";
+  const oversizedFile = selectedFiles.find((file) =>
+    file.type.startsWith("video/")
+      ? file.size > MAX_GALLERY_VIDEO_UPLOAD_BYTES
+      : file.size > MAX_GALLERY_UPLOAD_BYTES
+  );
+
+  if (oversizedFile) {
+    state.editorStatus = oversizedFile.type.startsWith("video/")
+      ? "That video is too large. Use a short video under 25 MB."
+      : "That photo is too large. Use an image under 8 MB.";
     state.editorStatusType = "error";
     renderApp();
     return;
   }
 
   try {
-    state.editorStatus = "Preparing photo...";
+    state.editorStatus = `Preparing ${selectedFiles.length === 1 ? "media" : "media files"}...`;
     state.editorStatusType = "info";
     renderApp();
-    item.photoUrl = await optimizeImageDataUrl(file);
-    state.editorStatus = "Photo attached. Save changes when the gallery looks right.";
+
+    const nextMedia = [];
+
+    for (const file of selectedFiles) {
+      nextMedia.push(await optimizeGalleryMediaFile(file));
+    }
+
+    item.media = [...normalizeGalleryMedia(item), ...nextMedia].slice(0, 8);
+    item.photoUrl = item.media.find((mediaItem) => mediaItem.type === "image")?.src || "";
+    state.editorStatus = "Media attached. Save changes when the gallery looks right.";
     state.editorStatusType = "info";
     renderApp();
   } catch (error) {
-    state.editorStatus = error.message || "The photo could not be attached.";
+    state.editorStatus = error.message || "The media could not be attached.";
     state.editorStatusType = "error";
     renderApp();
   }
 }
 
-function clearGalleryPhoto(index) {
+function removeGalleryMedia(index, mediaIndex) {
   const item = state.editorDraft?.galleryItems?.[index];
 
   if (!item) {
     return;
   }
 
-  item.photoUrl = "";
-  state.editorStatus = "Photo removed. Save changes when the gallery looks right.";
+  const mediaItems = normalizeGalleryMedia(item);
+  mediaItems.splice(mediaIndex, 1);
+  item.media = mediaItems;
+  item.photoUrl = mediaItems.find((mediaItem) => mediaItem.type === "image")?.src || "";
+  state.editorStatus = "Media removed. Save changes when the gallery looks right.";
   state.editorStatusType = "info";
   renderApp();
 }
@@ -2551,8 +2794,9 @@ function buildContentFromDraft() {
       title: cleanText(item.title, "").trim(),
       copy: cleanText(item.copy, "").trim(),
       photoUrl: cleanText(item.photoUrl, "").trim(),
+      media: normalizeGalleryMedia(item),
     }))
-    .filter((item) => item.title || item.copy || item.photoUrl);
+    .filter((item) => item.title || item.copy || item.photoUrl || item.media.length);
 
   const nextContent = normalizeContent({
     ...deepClone(defaultContent),
@@ -2943,8 +3187,16 @@ root.addEventListener("click", (event) => {
     return;
   }
 
+  if (action === "remove-gallery-media") {
+    removeGalleryMedia(
+      Number(actionTarget.dataset.galleryIndex),
+      Number(actionTarget.dataset.mediaIndex)
+    );
+    return;
+  }
+
   if (action === "clear-gallery-photo") {
-    clearGalleryPhoto(Number(actionTarget.dataset.galleryIndex));
+    removeGalleryMedia(Number(actionTarget.dataset.galleryIndex), 0);
     return;
   }
 
@@ -3050,8 +3302,8 @@ root.addEventListener("change", (event) => {
   const uploadIndex = event.target.dataset.galleryIndex;
   const uploadType = event.target.dataset.galleryUpload;
 
-  if (uploadIndex !== undefined && uploadType === "photo") {
-    uploadGalleryPhoto(Number(uploadIndex), event.target.files?.[0]);
+  if (uploadIndex !== undefined && (uploadType === "media" || uploadType === "photo")) {
+    uploadGalleryMedia(Number(uploadIndex), event.target.files);
     return;
   }
 

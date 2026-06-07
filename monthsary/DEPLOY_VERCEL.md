@@ -37,10 +37,10 @@ with commas.
   `/api/responses`.
 - Owner Edit can load saved responses, download them as CSV, or open a print
   view. Viewing responses requires the same `CONFIG_ADMIN_TOKEN`.
-- Memory gallery cards can include optional photo URLs or uploaded photos. The
-  editor resizes uploaded photos before saving them. Hosted image links or
-  project-relative files such as `./photos/photo.jpg` are still best for large
-  galleries.
+- Memory gallery cards can include optional photo URLs, multiple uploaded
+  images, and short uploaded videos. The editor compresses uploads before saving
+  them. Hosted image/video links or project-relative files such as
+  `./photos/photo.jpg` are still best for large galleries or longer videos.
 - After the visitor reaches the final letter, refreshes on that device open the
   keepsake page with the letter and memory gallery instead of restarting the
   fake test. The Owner Edit reset button clears that mode. On Vercel, the reset

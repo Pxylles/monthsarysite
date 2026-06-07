@@ -788,6 +788,22 @@ button {
   box-shadow: var(--shadow-soft);
 }
 
+.editor-media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.editor-media-item {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.editor-media-item .editor-photo-preview {
+  width: 100%;
+}
+
 .editor-question-list {
   display: grid;
   gap: 16px;
@@ -1292,13 +1308,27 @@ button {
   border: 1px solid rgba(255, 255, 255, 0.86);
 }
 
-.memory-photo {
+.memory-media-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.memory-media-grid.is-single {
+  grid-template-columns: 1fr;
+}
+
+.memory-media {
   width: 100%;
   aspect-ratio: 4 / 3;
   object-fit: cover;
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.86);
   box-shadow: var(--shadow-soft);
+}
+
+.memory-video {
+  background: #111;
 }
 
 .memory-card span {
