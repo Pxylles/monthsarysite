@@ -278,10 +278,10 @@ function normalizeContent(candidate) {
   const gameType = validGameTypes.includes(source.game?.type) ? source.game.type : base.game.type;
   const chineseWords = Array.isArray(source.game?.chineseWords) && source.game.chineseWords.length
     ? source.game.chineseWords.map((word) => ({
-        characters: cleanText(word?.characters, ""),
-        pinyin: cleanText(word?.pinyin, ""),
-        meaning: cleanText(word?.meaning, ""),
-      })).filter((word) => word.characters)
+      characters: cleanText(word?.characters, ""),
+      pinyin: cleanText(word?.pinyin, ""),
+      meaning: cleanText(word?.meaning, ""),
+    })).filter((word) => word.characters)
     : base.game.chineseWords || [];
   base.game = {
     type: gameType,
@@ -305,13 +305,13 @@ function normalizeContent(candidate) {
     title: cleanText(source.gallery?.title, base.gallery?.title || "Tiny things I want to keep."),
     items: Array.isArray(source.gallery?.items) && source.gallery.items.length
       ? source.gallery.items
-          .map((item) => ({
-            title: cleanText(item?.title, ""),
-            copy: cleanText(item?.copy, ""),
-            photoUrl: cleanText(item?.photoUrl, ""),
-            media: normalizeGalleryMedia(item),
-          }))
-          .filter((item) => item.title || item.copy || item.photoUrl || item.media.length)
+        .map((item) => ({
+          title: cleanText(item?.title, ""),
+          copy: cleanText(item?.copy, ""),
+          photoUrl: cleanText(item?.photoUrl, ""),
+          media: normalizeGalleryMedia(item),
+        }))
+        .filter((item) => item.title || item.copy || item.photoUrl || item.media.length)
       : base.gallery?.items || [],
   };
 
@@ -829,20 +829,20 @@ function renderMemoryPatternScreen() {
             aria-label="Nine square memory grid"
           >
             ${new Array(9)
-              .fill(null)
-              .map((_, index) => {
-                const tileNumber = index + 1;
-                const isActive = game.activeTile === tileNumber;
-                const isSelected = game.selected.includes(tileNumber);
-                const classes = [
-                  "focus-tile",
-                  isActive ? "is-active" : "",
-                  isSelected ? "is-selected" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ");
+      .fill(null)
+      .map((_, index) => {
+        const tileNumber = index + 1;
+        const isActive = game.activeTile === tileNumber;
+        const isSelected = game.selected.includes(tileNumber);
+        const classes = [
+          "focus-tile",
+          isActive ? "is-active" : "",
+          isSelected ? "is-selected" : "",
+        ]
+          .filter(Boolean)
+          .join(" ");
 
-                return `
+        return `
                   <button
                     class="${classes}"
                     type="button"
@@ -852,30 +852,28 @@ function renderMemoryPatternScreen() {
                     aria-label="Grid square ${tileNumber}"
                   ></button>
                 `;
-              })
-              .join("")}
+      })
+      .join("")}
           </div>
         </div>
-        ${
-          !game.running || game.locked
-            ? `
+        ${!game.running || game.locked
+      ? `
               <div class="game-overlay">
                 ${game.locked ? "" : `<p class="${statusClass}">${escapeHtml(game.message)}</p>`}
                 <div class="button-row">
-                  ${
-                    game.locked || game.won
-                      ? ""
-                      : `
+                  ${game.locked || game.won
+        ? ""
+        : `
                         <button class="primary-button" type="button" data-action="start-game">
                           ${game.failed ? "Retry test" : "Start test"}
                         </button>
                       `
-                  }
+      }
                 </div>
               </div>
             `
-            : ""
-        }
+      : ""
+    }
       </div>
 
       <p class="game-tip">Tip for the tester: the pattern gets slightly longer each round.</p>
@@ -931,9 +929,9 @@ function stopBrushSound() {
       setTimeout(() => {
         try {
           sourceToStop.stop();
-        } catch (e) {}
+        } catch (e) { }
       }, 80);
-    } catch (e) {}
+    } catch (e) { }
   }
   brushSource = null;
   brushGain = null;
@@ -1219,7 +1217,7 @@ function renderChineseTracingScreen() {
     const fullWord = getChineseWords().map(w => w.characters).join("");
     const pinyin = getChineseWords().map(w => w.pinyin).join(" ");
     const meaning = getChineseWords().map(w => w.meaning).join(", ");
-    
+
     return `
       <section class="game-shell word-reveal-shell">
         <div class="word-reveal-hearts" aria-hidden="true">
@@ -1239,12 +1237,12 @@ function renderChineseTracingScreen() {
 
         <div class="tracing-actions">
           <div class="button-row">
-            ${tracing.isContinuing 
-              ? `<div class="revealed-loading">
+            ${tracing.isContinuing
+        ? `<div class="revealed-loading">
                    <span class="rl-dot"></span><span class="rl-dot"></span><span class="rl-dot"></span>
-                 </div>` 
-              : `<div class="revealed-loading" style="opacity:0.5;">Continuing automatically…</div>`
-            }
+                 </div>`
+        : `<div class="revealed-loading" style="opacity:0.5;">Continuing automatically…</div>`
+      }
           </div>
         </div>
       </section>
@@ -1278,27 +1276,27 @@ function renderChineseTracingScreen() {
           class="tracing-canvas"
           data-action-zone="tracing"
         ></canvas>
-        ${tracing.submitted && tracing.passed 
-          ? `
+        ${tracing.submitted && tracing.passed
+      ? `
             <div class="tracing-success-overlay">
               <div class="success-heart">❤️</div>
               <div class="success-score">${getTracingCompliment(tracing.score)}</div>
             </div>
-          ` 
-          : ""
-        }
+          `
+      : ""
+    }
       </div>
 
       <div class="tracing-actions">
         <p class="${statusClass}">${escapeHtml(tracing.message)}</p>
         <div class="button-row">
           ${!game.running
-            ? `<button class="primary-button" type="button" data-action="start-chinese-tracing">Start test</button>`
-            : tracing.submitted
-              ? ""
-              : `<button class="primary-button" type="button" data-action="submit-tracing">Check tracing</button>
+      ? `<button class="primary-button" type="button" data-action="start-chinese-tracing">Start test</button>`
+      : tracing.submitted
+        ? ""
+        : `<button class="primary-button" type="button" data-action="submit-tracing">Check tracing</button>
                  <button class="secondary-button" type="button" data-action="clear-tracing">Clear</button>`
-          }
+    }
         </div>
       </div>
 
@@ -1454,15 +1452,15 @@ function renderIntroScreen() {
           </div>
           <div class="mini-list">
             ${activeContent.intro.points
-              .map(
-                (point) => `
+      .map(
+        (point) => `
                   <div class="mini-row">
                     <span>${escapeHtml(point.label)}</span>
                     <strong>${escapeHtml(point.value)}</strong>
                   </div>
                 `
-              )
-              .join("")}
+      )
+      .join("")}
           </div>
         </div>
       </div>
@@ -1492,8 +1490,8 @@ function renderQuestionInput(question) {
   return `
     <div class="choice-grid">
       ${question.options
-        .map(
-          (option, index) => `
+      .map(
+        (option, index) => `
             <button
               class="choice-button"
               type="button"
@@ -1503,8 +1501,8 @@ function renderQuestionInput(question) {
               ${escapeHtml(option.label)}
             </button>
           `
-        )
-        .join("")}
+      )
+      .join("")}
     </div>
   `;
 }
@@ -1548,11 +1546,10 @@ function renderQuestionScreen() {
           </div>
           <h1 class="panel-title">${escapeHtml(question.prompt)}</h1>
           <p class="question-note">${escapeHtml(question.note || "")}</p>
-          ${
-            state.questionStage === "feedback"
-              ? renderQuestionFeedback()
-              : renderQuestionInput(question)
-          }
+          ${state.questionStage === "feedback"
+      ? renderQuestionFeedback()
+      : renderQuestionInput(question)
+    }
         </div>
       </div>
     </section>
@@ -1606,8 +1603,8 @@ function renderLetter() {
       <p class="eyebrow">${escapeHtml(activeContent.letter.eyebrow)}</p>
       <h2 class="letter-title">${escapeHtml(activeContent.letter.title)}</h2>
       ${activeContent.letter.paragraphs
-        .map((paragraph) => `<p class="letter-copy">${escapeHtml(paragraph)}</p>`)
-        .join("")}
+      .map((paragraph) => `<p class="letter-copy">${escapeHtml(paragraph)}</p>`)
+      .join("")}
       <p class="letter-signoff">${escapeHtml(activeContent.letter.signoff)}</p>
     </article>
   `;
@@ -1623,9 +1620,9 @@ function renderMemoryMedia(item, galleryIndex) {
   return `
     <div class="memory-media-grid ${mediaItems.length === 1 ? "is-single" : ""}">
       ${mediaItems
-        .map((mediaItem, mediaIndex) =>
-          mediaItem.type === "video"
-            ? `
+      .map((mediaItem, mediaIndex) =>
+        mediaItem.type === "video"
+          ? `
               <video
                 class="memory-media memory-video"
                 src="${escapeHtml(mediaItem.src)}"
@@ -1637,11 +1634,11 @@ function renderMemoryMedia(item, galleryIndex) {
                 data-media-index="${mediaIndex}"
               ></video>
             `
-            : `
+          : `
               <img
                 class="memory-media memory-photo"
                 src="${escapeHtml(mediaItem.src)}"
-                alt="${escapeHtml(mediaItem.caption || item.title || "Memory photo") }"
+                alt="${escapeHtml(mediaItem.caption || item.title || "Memory photo")}"
                 loading="lazy"
                 data-memory-photo="true"
                 data-action="open-memory-preview"
@@ -1649,8 +1646,8 @@ function renderMemoryMedia(item, galleryIndex) {
                 data-media-index="${mediaIndex}"
               />
             `
-        )
-        .join("")}
+      )
+      .join("")}
     </div>
   `;
 }
@@ -1668,8 +1665,8 @@ function renderMemoryGallery() {
       <h2 class="letter-title">${escapeHtml(gallery.title)}</h2>
       <div class="memory-grid">
         ${gallery.items
-          .map(
-            (item, index) => `
+      .map(
+        (item, index) => `
               <article class="memory-card">
                 ${renderMemoryMedia(item, index)}
                 <span>${String(index + 1).padStart(2, "0")}</span>
@@ -1677,8 +1674,8 @@ function renderMemoryGallery() {
                 <p>${escapeHtml(item.copy)}</p>
               </article>
             `
-          )
-          .join("")}
+      )
+      .join("")}
       </div>
     </section>
   `;
@@ -1777,9 +1774,9 @@ function renderMemoryPreviewOverlay() {
         <div class="memory-preview-topline">Memory ${memoryNumber}</div>
         <div class="memory-preview-media${mediaDirectionClass}">
           ${item.type === "video"
-            ? `<video class="memory-preview-video" src="${escapeHtml(item.src)}" controls autoplay muted playsinline></video>`
-            : `<img class="memory-preview-photo" src="${escapeHtml(item.src)}" alt="${escapeHtml(caption)}" />`
-          }
+      ? `<video class="memory-preview-video" src="${escapeHtml(item.src)}" controls autoplay muted playsinline></video>`
+      : `<img class="memory-preview-photo" src="${escapeHtml(item.src)}" alt="${escapeHtml(caption)}" />`
+    }
         </div>
         <div class="memory-preview-caption">
           ${footerText ? `<p>${escapeHtml(footerText)}</p>` : ""}
@@ -1868,11 +1865,10 @@ function renderFinaleScreen() {
             </button>
 
             <button class="envelope-button" type="button" data-action="toggle-envelope">
-              ${
-                state.envelopeOpen
-                  ? escapeHtml(activeContent.finale.openedButtonLabel)
-                  : escapeHtml(activeContent.finale.envelopeButtonLabel)
-              }
+              ${state.envelopeOpen
+      ? escapeHtml(activeContent.finale.openedButtonLabel)
+      : escapeHtml(activeContent.finale.envelopeButtonLabel)
+    }
             </button>
           </div>
         </div>
@@ -2038,9 +2034,8 @@ function renderQuestionEditor(question, index) {
         </label>
       </div>
 
-      ${
-        question.type === "choice"
-          ? `
+      ${question.type === "choice"
+      ? `
             <label class="editor-field editor-field-full">
               <span class="editor-label">Options</span>
               <textarea
@@ -2054,7 +2049,7 @@ function renderQuestionEditor(question, index) {
               </span>
             </label>
           `
-          : `
+      : `
             <div class="editor-grid">
               <label class="editor-field editor-field-full">
                 <span class="editor-label">Placeholder</span>
@@ -2089,7 +2084,7 @@ function renderQuestionEditor(question, index) {
               </label>
             </div>
           `
-      }
+    }
     </article>
   `;
 }
@@ -2106,12 +2101,11 @@ function renderGalleryMediaEditor(item, index) {
       <span class="editor-label">Media preview</span>
       <div class="editor-media-grid">
         ${mediaItems
-          .map(
-            (mediaItem, mediaIndex) => `
+      .map(
+        (mediaItem, mediaIndex) => `
               <div class="editor-media-item">
-                ${
-                  mediaItem.type === "video"
-                    ? `
+                ${mediaItem.type === "video"
+            ? `
                       <video
                         class="editor-photo-preview"
                         src="${escapeHtml(mediaItem.src)}"
@@ -2120,14 +2114,14 @@ function renderGalleryMediaEditor(item, index) {
                         preload="metadata"
                       ></video>
                     `
-                    : `
+            : `
                       <img
                         class="editor-photo-preview"
                         src="${escapeHtml(mediaItem.src)}"
                         alt="${escapeHtml(item.title || "Memory media preview")}"
                       />
                     `
-                }
+          }
                 <button
                   class="tiny-button tiny-button-danger"
                   type="button"
@@ -2139,8 +2133,8 @@ function renderGalleryMediaEditor(item, index) {
                 </button>
               </div>
             `
-          )
-          .join("")}
+      )
+      .join("")}
       </div>
     </div>
   `;
@@ -2276,13 +2270,12 @@ function renderSavedResponsesPanel() {
 
       <p class="editor-help response-panel-status">${escapeHtml(statusText || "")}</p>
 
-      ${
-        state.savedResponses.length
-          ? `
+      ${state.savedResponses.length
+      ? `
             <div class="response-list">
               ${state.savedResponses
-                .map(
-                  (savedResponse, index) => `
+        .map(
+          (savedResponse, index) => `
                     <article class="response-card">
                       <div class="response-card-top">
                         <h3 class="editor-card-title">Response ${state.savedResponses.length - index}</h3>
@@ -2299,32 +2292,31 @@ function renderSavedResponsesPanel() {
                         </div>
                       </div>
                       ${(savedResponse.answers || [])
-                        .map(
-                          (item) => `
+              .map(
+                (item) => `
                             <div class="response-answer">
                               <p>${escapeHtml(item.prompt || "Question")}</p>
                               <strong>${escapeHtml(item.answer || "No answer")}</strong>
                             </div>
                           `
-                        )
-                        .join("")}
+              )
+              .join("")}
                     </article>
                   `
-                )
-                .join("")}
+        )
+        .join("")}
             </div>
           `
-          : ""
-      }
+      : ""
+    }
     </section>
   `;
 }
 
 function renderEditorPanel() {
   const draft = state.editorDraft || createEditorDraft();
-  const statusClass = `code-help editor-status ${
-    state.editorStatusType === "error" ? "is-error" : ""
-  }`;
+  const statusClass = `code-help editor-status ${state.editorStatusType === "error" ? "is-error" : ""
+    }`;
 
   return `
     <section class="screen-card">
@@ -2370,25 +2362,25 @@ function renderEditorPanel() {
 
           <div class="editor-grid">
             ${renderEditorInput(
-              "Floating label",
-              "brandLabel",
-              draft.brandLabel,
-              "This is the small chip at the top of the site."
-            )}
+    "Floating label",
+    "brandLabel",
+    draft.brandLabel,
+    "This is the small chip at the top of the site."
+  )}
             ${renderEditorInput(
-              "Visitor 6 digit code",
-              "accessCode",
-              draft.accessCode,
-              "Six numbers only.",
-              'inputmode="numeric" maxlength="6"'
-            )}
+    "Visitor 6 digit code",
+    "accessCode",
+    draft.accessCode,
+    "Six numbers only.",
+    'inputmode="numeric" maxlength="6"'
+  )}
             ${renderEditorInput(
-              "Editor 6 digit code",
-              "editorCode",
-              draft.editorCode,
-              "This protects the built-in editor.",
-              'inputmode="numeric" maxlength="6"'
-            )}
+    "Editor 6 digit code",
+    "editorCode",
+    draft.editorCode,
+    "This protects the built-in editor.",
+    'inputmode="numeric" maxlength="6"'
+  )}
             <label class="editor-field editor-field-full">
               <span class="editor-label">Game type</span>
               <select
@@ -2404,13 +2396,13 @@ function renderEditorPanel() {
               <span class="editor-help">Choose which mini-game visitors play before the surprise.</span>
             </label>
             ${renderEditorSlider(
-              "Memory game rounds",
-              "gameRounds",
-              draft.gameRounds,
-              1,
-              10,
-              "Choose how many rounds the Memory Pattern minigame uses."
-            )}
+    "Memory game rounds",
+    "gameRounds",
+    draft.gameRounds,
+    1,
+    20,
+    "Choose how many rounds the Memory Pattern minigame uses."
+  )}
             <label class="editor-field editor-field-full">
               <span class="editor-label">Chinese tracing words</span>
               <textarea
@@ -2425,21 +2417,21 @@ function renderEditorPanel() {
             ${renderEditorInput("Lock screen title", "lockTitle", draft.lockTitle)}
             ${renderEditorTextarea("Lock screen copy", "lockCopy", draft.lockCopy, "", 3)}
             ${renderEditorInput(
-              "Lock screen hint",
-              "lockHint",
-              draft.lockHint,
-              "This clue appears under the six code boxes."
-            )}
+    "Lock screen hint",
+    "lockHint",
+    draft.lockHint,
+    "This clue appears under the six code boxes."
+  )}
             ${renderEditorInput("Intro title", "introTitle", draft.introTitle)}
             ${renderEditorTextarea("Intro copy", "introCopy", draft.introCopy, "", 3)}
             ${renderEditorInput("Intro side title", "introSideTitle", draft.introSideTitle)}
             ${renderEditorTextarea(
-              "Intro side copy",
-              "introSideCopy",
-              draft.introSideCopy,
-              "",
-              3
-            )}
+    "Intro side copy",
+    "introSideCopy",
+    draft.introSideCopy,
+    "",
+    3
+  )}
             ${renderEditorInput("Finale title", "finaleTitle", draft.finaleTitle)}
             ${renderEditorTextarea("Finale copy", "finaleCopy", draft.finaleCopy, "", 3)}
           </div>
@@ -2492,12 +2484,12 @@ function renderEditorPanel() {
             ${renderEditorInput("Letter title", "letterTitle", draft.letterTitle)}
             ${renderEditorInput("Letter signoff", "letterSignoff", draft.letterSignoff)}
             ${renderEditorTextarea(
-              "Letter paragraphs",
-              "letterParagraphsText",
-              draft.letterParagraphsText,
-              "Separate paragraphs with a blank line.",
-              12
-            )}
+    "Letter paragraphs",
+    "letterParagraphsText",
+    draft.letterParagraphsText,
+    "Separate paragraphs with a blank line.",
+    12
+  )}
           </div>
         </section>
 
@@ -2519,13 +2511,12 @@ function renderEditorPanel() {
           </div>
 
           <div class="editor-question-list">
-            ${
-              draft.galleryItems.length
-                ? draft.galleryItems
-                    .map((item, index) => renderGalleryItemEditor(item, index))
-                    .join("")
-                : `<p class="editor-help">No gallery memories yet. Add one when you are ready.</p>`
-            }
+            ${draft.galleryItems.length
+      ? draft.galleryItems
+        .map((item, index) => renderGalleryItemEditor(item, index))
+        .join("")
+      : `<p class="editor-help">No gallery memories yet. Add one when you are ready.</p>`
+    }
           </div>
         </section>
       </div>
@@ -2834,7 +2825,7 @@ function _onFirstUserGestureForAudio() {
     try {
       surpriseAudio.muted = false;
       surpriseAudio.volume = 0.5;
-      surpriseAudio.play().catch(() => {});
+      surpriseAudio.play().catch(() => { });
     } catch (e) {
       // ignore
     }
@@ -3280,25 +3271,25 @@ function addQuestion(type) {
   const newQuestion =
     type === "text"
       ? {
-          id: `question-${nextNumber}`,
-          type: "text",
-          prompt: "Write your question here",
-          note: "",
-          placeholder: "Type here...",
-          buttonLabel: "Save answer",
-          feedback: activeContent.questionFlow.defaultFeedback,
-          optionsText: "",
-        }
+        id: `question-${nextNumber}`,
+        type: "text",
+        prompt: "Write your question here",
+        note: "",
+        placeholder: "Type here...",
+        buttonLabel: "Save answer",
+        feedback: activeContent.questionFlow.defaultFeedback,
+        optionsText: "",
+      }
       : {
-          id: `question-${nextNumber}`,
-          type: "choice",
-          prompt: "Write your question here",
-          note: "",
-          placeholder: "",
-          buttonLabel: "",
-          feedback: activeContent.questionFlow.defaultFeedback,
-          optionsText: "Option one | Cute feedback\nOption two | Another cute feedback",
-        };
+        id: `question-${nextNumber}`,
+        type: "choice",
+        prompt: "Write your question here",
+        note: "",
+        placeholder: "",
+        buttonLabel: "",
+        feedback: activeContent.questionFlow.defaultFeedback,
+        optionsText: "Option one | Cute feedback\nOption two | Another cute feedback",
+      };
 
   state.editorDraft.questions.push(newQuestion);
   renderApp();
@@ -3802,8 +3793,8 @@ async function saveEditorChanges() {
       : onlineSaveError
         ? `Saved only on this browser. Online save failed: ${onlineSaveError}`
         : state.hostedConfigStatus === "ready"
-        ? "Saved online. The hosted site now uses your new questions and letter."
-        : "Saved on this browser. Add hosted storage to sync it online.";
+          ? "Saved online. The hosted site now uses your new questions and letter."
+          : "Saved on this browser. Add hosted storage to sync it online.";
     state.editorStatusType = "info";
     renderApp();
   } catch (error) {
@@ -4016,15 +4007,15 @@ function printSavedResponses() {
             <div class="answer-panel">
               <p class="kicker">Her answers</p>
               ${(savedResponse.answers || [])
-                .map(
-                  (item) => `
+          .map(
+            (item) => `
                     <div class="answer">
                       <p>${escapeHtml(item.prompt || "Question")}</p>
                       <strong>${escapeHtml(item.answer || "No answer")}</strong>
                     </div>
                   `
-                )
-                .join("")}
+          )
+          .join("")}
             </div>
           </section>
         </article>
