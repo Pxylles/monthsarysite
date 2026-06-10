@@ -1446,10 +1446,16 @@ button {
   border: 1px solid rgba(255, 255, 255, 0.18);
 }
 
-.memory-preview-close {
+.memory-preview-top-actions {
   position: absolute;
   top: 18px;
   right: 18px;
+  display: flex;
+  gap: 8px;
+  z-index: 3;
+}
+
+.memory-preview-close {
   width: 42px;
   height: 42px;
   border: none;
@@ -1459,6 +1465,30 @@ button {
   font-size: 1.5rem;
   line-height: 1;
   cursor: pointer;
+  transition: transform 180ms ease, background-color 180ms ease;
+}
+
+.memory-preview-close:hover {
+  transform: scale(1.08);
+}
+
+.memory-preview-download {
+  width: 42px;
+  height: 42px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  color: #111;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: transform 180ms ease, background-color 180ms ease;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+
+.memory-preview-download:hover {
+  transform: scale(1.08);
+  background: rgba(255, 255, 255, 1);
 }
 
 .memory-preview-nav {
@@ -2059,4 +2089,286 @@ body[data-theme="dark"] .envelope-shadow {
   background: linear-gradient(180deg, #dff9ec, #8ee0b8);
   box-shadow: 0 18px 34px rgba(44, 163, 119, 0.24);
   animation: correct-flash 420ms ease;
+}
+
+/* ── Chinese Word Tracing Game Styles ── */
+.game-hud--tracing {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.tracing-canvas-wrap {
+  position: relative;
+  width: min(100%, 420px);
+  aspect-ratio: 1 / 1;
+  margin: 24px auto;
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.88);
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.04), var(--shadow-soft);
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  touch-action: none;
+}
+
+.tracing-template-canvas,
+.tracing-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.tracing-template-canvas {
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.35; /* Comfortable visibility for tracing */
+  transition: opacity 0.3s ease;
+}
+
+.tracing-template-canvas.is-hidden {
+  opacity: 0;
+}
+
+.tracing-canvas {
+  z-index: 2;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.tracing-character-hint {
+  position: absolute;
+  font-size: 10rem;
+  font-weight: 800;
+  color: rgba(47, 40, 64, 0.18); /* Increased visibility for template preview */
+  user-select: none;
+  pointer-events: none;
+  z-index: 0;
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+.tracing-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-top: 14px;
+}
+
+.tracing-pinyin {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--berry);
+  letter-spacing: 0.04em;
+}
+
+.tracing-meaning {
+  font-size: 0.95rem;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.tracing-actions {
+  display: grid;
+  gap: 16px;
+  text-align: center;
+  margin-top: 12px;
+  justify-items: center;
+}
+
+/* Dark mode overrides for tracing */
+body[data-theme="dark"] .tracing-canvas-wrap {
+  background: rgba(35, 26, 49, 0.65);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.2), var(--shadow-soft);
+}
+
+body[data-theme="dark"] .tracing-character-hint {
+  color: rgba(255, 255, 255, 0.20); /* Increased visibility for template preview in dark mode */
+}
+
+/* ── Word Reveal Shell & Floating Hearts ── */
+.word-reveal-shell {
+  position: relative;
+  overflow: hidden;
+}
+
+.word-reveal-hearts {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.wrheart {
+  position: absolute;
+  font-size: 1.8rem;
+  animation: float-heart 4s ease-in-out infinite;
+  opacity: 0.45;
+}
+
+.wrheart--1 { left: 8%; top: 15%; animation-delay: 0s; animation-duration: 3.6s; }
+.wrheart--2 { left: 80%; top: 22%; animation-delay: 0.8s; animation-duration: 4.2s; font-size: 1.4rem; }
+.wrheart--3 { left: 60%; top: 72%; animation-delay: 1.4s; animation-duration: 3.9s; }
+.wrheart--4 { left: 18%; top: 65%; animation-delay: 0.4s; animation-duration: 4.5s; font-size: 1.5rem; }
+
+@keyframes float-heart {
+  0%   { transform: translateY(0) rotate(-8deg); opacity: 0.4; }
+  50%  { transform: translateY(-20px) rotate(8deg); opacity: 0.7; }
+  100% { transform: translateY(0) rotate(-8deg); opacity: 0.4; }
+}
+
+/* Loading dots for auto-continue */
+.revealed-loading {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  font-size: 1.05rem;
+  color: var(--muted);
+  font-weight: 700;
+  font-style: italic;
+  margin-top: 4px;
+}
+
+.rl-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--berry);
+  opacity: 0.5;
+  animation: dot-bounce 1.2s ease-in-out infinite;
+}
+
+.rl-dot:nth-child(2) { animation-delay: 0.2s; }
+.rl-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes dot-bounce {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40%            { transform: scale(1.1); opacity: 1; }
+}
+
+/* ── Word Reveal Card Styles ── */
+.word-reveal-card {
+  width: min(100%, 480px);
+  margin: 32px auto;
+  padding: 40px 28px;
+  border-radius: var(--radius-xl);
+  background: linear-gradient(160deg, rgba(255,245,248,0.97) 0%, rgba(255,232,240,0.95) 100%);
+  border: 1.5px solid rgba(185, 74, 102, 0.22);
+  box-shadow: 0 8px 40px rgba(185, 74, 102, 0.14), 0 2px 12px rgba(185, 74, 102, 0.08), var(--shadow);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  animation: rise-in 500ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.revealed-love-msg {
+  font-size: clamp(1.6rem, 5vw, 2.2rem);
+  font-weight: 900;
+  font-family: "Fraunces", serif;
+  color: var(--berry);
+  letter-spacing: -0.02em;
+  margin-bottom: 8px;
+  text-shadow: 0 2px 12px rgba(185, 74, 102, 0.18);
+}
+
+.revealed-characters {
+  font-size: clamp(3.2rem, 10vw, 4.8rem);
+  font-weight: 800;
+  color: var(--berry);
+  text-shadow: 0 4px 18px rgba(185, 74, 102, 0.16);
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  letter-spacing: 0.04em;
+}
+
+.revealed-pinyin {
+  font-size: 1.55rem;
+  font-weight: 800;
+  color: var(--berry);
+  margin-top: 8px;
+  letter-spacing: 0.05em;
+  opacity: 0.75;
+}
+
+.revealed-meaning {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin-top: 14px;
+  font-style: italic;
+  opacity: 0.95;
+}
+
+.revealed-monthsary {
+  font-size: 1.15rem;
+  color: var(--rose);
+  font-weight: 800;
+  margin-top: 18px;
+  border-top: 1px dashed rgba(185, 74, 102, 0.15);
+  padding-top: 18px;
+  width: 100%;
+}
+
+
+body[data-theme="dark"] .word-reveal-card {
+  background: linear-gradient(160deg, rgba(42, 20, 32, 0.92) 0%, rgba(52, 18, 36, 0.94) 100%);
+  border-color: rgba(185, 74, 102, 0.28);
+  box-shadow: 0 8px 40px rgba(185, 74, 102, 0.18), 0 2px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* ── Tracing Success Overlay & Animations ── */
+.tracing-canvas-wrap.is-success {
+  border-color: rgba(44, 163, 119, 0.65);
+  background: linear-gradient(180deg, #dff9ec, #dff9ec);
+  animation: correct-flash 420ms ease;
+}
+
+body[data-theme="dark"] .tracing-canvas-wrap.is-success {
+  background: rgba(16, 48, 35, 0.85);
+  border-color: rgba(44, 163, 119, 0.5);
+}
+
+.tracing-success-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: rgba(255, 248, 244, 0.85);
+  z-index: 10;
+  animation: rise-in 0.28s ease both;
+}
+
+body[data-theme="dark"] .tracing-success-overlay {
+  background: rgba(26, 20, 32, 0.88);
+}
+
+.success-heart {
+  font-size: 3.5rem;
+  animation: pop-heart 0.65s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+}
+
+.success-score {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--berry);
+  margin-top: 8px;
+  font-family: "Fraunces", serif;
+}
+
+body[data-theme="dark"] .success-score {
+  color: var(--rose);
+}
+
+@keyframes pop-heart {
+  0% { transform: scale(0); }
+  70% { transform: scale(1.25); }
+  100% { transform: scale(1); }
 }

@@ -35,7 +35,11 @@ window.defaultSiteContent = {
   },
 
   game: {
+    type: "chinese-tracing",
     rounds: 3,
+    chineseWords: [
+      { characters: "我爱你", pinyin: "Wǒ ài nǐ", meaning: "I love you" },
+    ],
   },
 
   // Add more question objects to this array whenever you want.

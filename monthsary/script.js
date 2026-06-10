@@ -1,4 +1,4 @@
-const STORAGE_KEY = "monthsary-site-content-v1";
+const STORAGE_KEY = "monthsary-site-content-v2";
 const THEME_STORAGE_KEY = "monthsary-site-theme-v1";
 const MUSIC_STORAGE_KEY = "monthsary-site-music-v1";
 const EXPERIENCE_STORAGE_KEY = "monthsary-site-experience-v1";
@@ -9,6 +9,20 @@ const MAX_GALLERY_VIDEO_UPLOAD_BYTES = 25 * 1024 * 1024;
 const MAX_GALLERY_VIDEO_DATA_URL_BYTES = 4 * 1024 * 1024;
 const MAX_GALLERY_VIDEO_DIMENSION = 720;
 const MAX_GALLERY_VIDEO_SECONDS = 12;
+
+// ── Scalable game type registry ──────────────────────────────────────
+// To add a new game mode: 1) add an entry here, 2) add a renderXxxScreen()
+// function, 3) add game logic functions, 4) update the router in renderGameScreen().
+const GAME_TYPES = {
+  "memory-pattern": {
+    label: "Memory Pattern",
+    description: "Memorize highlighted squares, then repeat the pattern.",
+  },
+  "chinese-tracing": {
+    label: "Chinese Tracing",
+    description: "Trace Chinese characters on screen.",
+  },
+};
 const root = document.getElementById("app");
 const defaultSiteContent = window.defaultSiteContent;
 
@@ -80,6 +94,17 @@ function createInitialGameState(totalRounds = 3) {
     successFlash: false,
     locked: false,
     message: "Memorize the highlighted squares, then repeat the pattern.",
+    // Chinese tracing sub-state
+    chineseTracing: {
+      currentIndex: 0,
+      totalChars: 0,
+      score: 0,
+      passed: false,
+      submitted: false,
+      message: "Trace the character shown below.",
+      showWordReveal: false,
+      isContinuing: false,
+    },
   };
 }
 
@@ -249,8 +274,19 @@ function normalizeContent(candidate) {
   base.lockScreen.hint = cleanText(source.lockScreen?.hint, base.lockScreen.hint);
 
   const gameRounds = Number(source.game?.rounds);
+  const validGameTypes = Object.keys(GAME_TYPES);
+  const gameType = validGameTypes.includes(source.game?.type) ? source.game.type : base.game.type;
+  const chineseWords = Array.isArray(source.game?.chineseWords) && source.game.chineseWords.length
+    ? source.game.chineseWords.map((word) => ({
+        characters: cleanText(word?.characters, ""),
+        pinyin: cleanText(word?.pinyin, ""),
+        meaning: cleanText(word?.meaning, ""),
+      })).filter((word) => word.characters)
+    : base.game.chineseWords || [];
   base.game = {
+    type: gameType,
     rounds: Number.isInteger(gameRounds) && gameRounds > 0 ? gameRounds : base.game.rounds,
+    chineseWords,
   };
 
   base.intro.title = cleanText(source.intro?.title, base.intro.title);
@@ -644,6 +680,8 @@ function createEditorDraft(source = activeContent) {
       optionsText: question.type === "choice" ? formatChoiceOptions(question.options) : "",
     })),
     gameRounds: source.game?.rounds || 3,
+    gameType: source.game?.type || "memory-pattern",
+    chineseWordsText: (source.game?.chineseWords || []).map((w) => `${w.characters} | ${w.pinyin} | ${w.meaning}`).join("\n"),
   };
 }
 
@@ -745,6 +783,14 @@ function renderProgress() {
 }
 
 function renderGameScreen() {
+  const gameType = activeContent.game?.type || "memory-pattern";
+  if (gameType === "chinese-tracing") {
+    return renderChineseTracingScreen();
+  }
+  return renderMemoryPatternScreen();
+}
+
+function renderMemoryPatternScreen() {
   const game = state.game;
   const statusClass = game.failed ? "game-status is-danger" : "game-status";
   const fieldClass = game.won ? "game-field focus-test is-won" : "game-field focus-test";
@@ -833,6 +879,430 @@ function renderGameScreen() {
       </div>
 
       <p class="game-tip">Tip for the tester: the pattern gets slightly longer each round.</p>
+    </section>
+  `;
+}
+
+// ── Chinese Word Tracing Game ────────────────────────────────────────
+
+let brushSource = null;
+let brushGain = null;
+
+function startBrushSound() {
+  const context = getAudioContext();
+  if (!context || brushSource) return;
+
+  const bufferSize = context.sampleRate * 2;
+  const buffer = context.createBuffer(1, bufferSize, context.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) {
+    data[i] = Math.random() * 2 - 1;
+  }
+
+  brushSource = context.createBufferSource();
+  brushSource.buffer = buffer;
+  brushSource.loop = true;
+
+  const filter = context.createBiquadFilter();
+  filter.type = "bandpass";
+  filter.frequency.value = 1000;
+  filter.Q.value = 1.0;
+
+  brushGain = context.createGain();
+  brushGain.gain.setValueAtTime(0.001, context.currentTime);
+  brushGain.gain.exponentialRampToValueAtTime(0.025, context.currentTime + 0.04);
+
+  brushSource.connect(filter);
+  filter.connect(brushGain);
+  brushGain.connect(context.destination);
+
+  brushSource.start();
+}
+
+function stopBrushSound() {
+  if (!brushSource || !brushGain) return;
+  const context = getAudioContext();
+  if (context) {
+    try {
+      const now = context.currentTime;
+      brushGain.gain.setValueAtTime(brushGain.gain.value, now);
+      brushGain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+      const sourceToStop = brushSource;
+      setTimeout(() => {
+        try {
+          sourceToStop.stop();
+        } catch (e) {}
+      }, 80);
+    } catch (e) {}
+  }
+  brushSource = null;
+  brushGain = null;
+}
+
+function getChineseWords() {
+  const words = activeContent.game?.chineseWords || [];
+  return words.length ? words : [{ characters: "我爱你", pinyin: "Wǒ ài nǐ", meaning: "I love you" }];
+}
+
+function getAllTracingCharacters() {
+  return getChineseWords().flatMap((word) =>
+    Array.from(word.characters).map((char) => ({
+      char,
+      pinyin: word.pinyin,
+      meaning: word.meaning,
+      fullWord: word.characters,
+    }))
+  );
+}
+
+function startChineseTracingGame() {
+  stopGameLoop();
+  getAudioContext();
+  const chars = getAllTracingCharacters();
+  state.game = createInitialGameState(activeContent.game?.rounds);
+  state.game.running = true;
+  state.game.chineseTracing.totalChars = chars.length;
+  state.game.chineseTracing.currentIndex = 0;
+  state.game.chineseTracing.score = 0;
+  state.game.chineseTracing.passed = false;
+  state.game.chineseTracing.submitted = false;
+  state.game.chineseTracing.showWordReveal = false;
+  state.game.chineseTracing.isContinuing = false;
+  state.game.chineseTracing.message = "Trace the character with your finger or mouse.";
+  state.game.chineseTracing.paths = [];
+  renderApp();
+  requestAnimationFrame(() => {
+    initTracingCanvas();
+    drawTracingTemplate();
+  });
+}
+
+function drawSavedPaths(canvas, ctx) {
+  const paths = state.game.chineseTracing.paths || [];
+  if (!paths.length) return;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = 26;
+  ctx.strokeStyle = "rgba(185, 74, 102, 0.85)";
+  paths.forEach((path) => {
+    if (path.length < 2) return;
+    ctx.beginPath();
+    ctx.moveTo(path[0].x, path[0].y);
+    for (let i = 1; i < path.length; i++) {
+      ctx.lineTo(path[i].x, path[i].y);
+    }
+    ctx.stroke();
+  });
+}
+
+function initTracingCanvas() {
+  const canvas = document.getElementById("tracing-canvas");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const rect = canvas.parentElement.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  canvas.style.width = rect.width + "px";
+  canvas.style.height = rect.height + "px";
+  ctx.scale(dpr, dpr);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = 26;
+  ctx.strokeStyle = "rgba(185, 74, 102, 0.85)";
+  canvas._drawing = false;
+  canvas._paths = [];
+  canvas._currentPath = [];
+
+  drawSavedPaths(canvas, ctx);
+
+  canvas.addEventListener("pointerdown", handleTracingPointerDown);
+  canvas.addEventListener("pointermove", handleTracingPointerMove);
+  canvas.addEventListener("pointerup", handleTracingPointerUp);
+  canvas.addEventListener("pointercancel", handleTracingPointerUp);
+  canvas.addEventListener("pointerleave", () => {
+    if (canvas._drawing) {
+      canvas._drawing = false;
+      stopBrushSound();
+    }
+  });
+}
+
+function handleTracingPointerDown(event) {
+  const canvas = document.getElementById("tracing-canvas");
+  if (!canvas || !state.game.running || state.game.chineseTracing.submitted) return;
+  const rect = canvas.getBoundingClientRect();
+  canvas._drawing = true;
+  canvas._currentPath = [{ x: event.clientX - rect.left, y: event.clientY - rect.top }];
+  startBrushSound();
+  event.preventDefault();
+}
+
+function handleTracingPointerMove(event) {
+  const canvas = document.getElementById("tracing-canvas");
+  if (!canvas || !canvas._drawing) return;
+  const ctx = canvas.getContext("2d");
+  const rect = canvas.getBoundingClientRect();
+  const x = event.clientX - rect.left;
+  const y = event.clientY - rect.top;
+  canvas._currentPath.push({ x, y });
+
+  // Draw the latest segment
+  if (canvas._currentPath.length >= 2) {
+    const prev = canvas._currentPath[canvas._currentPath.length - 2];
+    ctx.beginPath();
+    ctx.moveTo(prev.x, prev.y);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  }
+  event.preventDefault();
+}
+
+function handleTracingPointerUp(event) {
+  const canvas = document.getElementById("tracing-canvas");
+  if (!canvas || !canvas._drawing) return;
+  canvas._drawing = false;
+  if (canvas._currentPath.length > 1) {
+    if (!state.game.chineseTracing.paths) {
+      state.game.chineseTracing.paths = [];
+    }
+    state.game.chineseTracing.paths.push([...canvas._currentPath]);
+  }
+  canvas._currentPath = [];
+  stopBrushSound();
+  event.preventDefault();
+}
+
+function scoreTracingAttempt() {
+  const canvas = document.getElementById("tracing-canvas");
+  const templateCanvas = document.getElementById("tracing-template-canvas");
+  if (!canvas || !templateCanvas) return 0;
+
+  const ctx = canvas.getContext("2d");
+  const tCtx = templateCanvas.getContext("2d");
+  const w = templateCanvas.width;
+  const h = templateCanvas.height;
+
+  // Get template pixels (where the character is drawn)
+  const templateData = tCtx.getImageData(0, 0, w, h).data;
+  // Get user drawing pixels
+  const userCanvas = document.createElement("canvas");
+  userCanvas.width = w;
+  userCanvas.height = h;
+  const uCtx = userCanvas.getContext("2d");
+  uCtx.drawImage(canvas, 0, 0, canvas.width, canvas.height, 0, 0, w, h);
+  const userData = uCtx.getImageData(0, 0, w, h).data;
+
+  let templatePixels = 0;
+  let coveredPixels = 0;
+  let userPixels = 0;
+
+  for (let i = 3; i < templateData.length; i += 4) {
+    const isTemplate = templateData[i] > 120; // High alpha threshold because template is solid gray
+    const isUser = userData[i] > 40;
+    if (isTemplate) templatePixels++;
+    if (isUser) userPixels++;
+    if (isTemplate && isUser) coveredPixels++;
+  }
+
+  if (templatePixels === 0) return 100;
+  const coverage = coveredPixels / templatePixels;
+  const precision = userPixels > 0 ? coveredPixels / userPixels : 0;
+  const score = Math.round((coverage * 0.6 + precision * 0.4) * 100);
+  return Math.max(0, Math.min(100, score));
+}
+
+function getTracingCompliment(score) {
+  if (score >= 80) return "Perfect! 💕";
+  if (score >= 60) return "Beautiful! ✨";
+  if (score >= 40) return "So pretty! 💗";
+  if (score >= 20) return "Lovely! 🌸";
+  return "Cute effort! 💖";
+}
+
+function submitTracingAttempt() {
+  const tracing = state.game.chineseTracing;
+  if (tracing.submitted) return;
+
+  const score = scoreTracingAttempt();
+  tracing.score = score;
+  tracing.submitted = true;
+  tracing.passed = true; // Always pass to make it easy and romantic!
+
+  playWinTone();
+  tracing.message = getTracingCompliment(score);
+  renderApp();
+  // Auto-advance after 1.5s so they can see their score and the success heart pop
+  setTimeout(() => advanceTracingCharacter(), 1500);
+}
+
+function advanceTracingCharacter() {
+  const tracing = state.game.chineseTracing;
+  const chars = getAllTracingCharacters();
+
+  if (tracing.currentIndex + 1 >= chars.length) {
+    // All characters done — show word reveal screen!
+    tracing.showWordReveal = true;
+    renderApp();
+
+    // Auto-advance after 1.5s, then 1.5s more before winGame
+    setTimeout(() => {
+      tracing.isContinuing = true;
+      renderApp();
+      setTimeout(() => {
+        winGame();
+      }, 1500);
+    }, 1500);
+    return;
+  }
+
+  tracing.currentIndex++;
+  tracing.score = 0;
+  tracing.passed = false;
+  tracing.submitted = false;
+  tracing.message = "Trace the character with your finger or mouse.";
+  tracing.paths = [];
+  renderApp();
+  requestAnimationFrame(() => {
+    initTracingCanvas();
+    drawTracingTemplate();
+  });
+}
+
+function retryTracingCharacter() {
+  const tracing = state.game.chineseTracing;
+  tracing.score = 0;
+  tracing.passed = false;
+  tracing.submitted = false;
+  tracing.message = "Try again. Trace more carefully this time.";
+  tracing.paths = [];
+  renderApp();
+  requestAnimationFrame(() => {
+    initTracingCanvas();
+    drawTracingTemplate();
+  });
+}
+
+function drawTracingTemplate() {
+  const templateCanvas = document.getElementById("tracing-template-canvas");
+  if (!templateCanvas) return;
+
+  const chars = getAllTracingCharacters();
+  const currentChar = chars[state.game.chineseTracing.currentIndex];
+  if (!currentChar) return;
+
+  const rect = templateCanvas.parentElement.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  templateCanvas.width = rect.width * dpr;
+  templateCanvas.height = rect.height * dpr;
+  templateCanvas.style.width = rect.width + "px";
+  templateCanvas.style.height = rect.height + "px";
+
+  const ctx = templateCanvas.getContext("2d");
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, rect.width, rect.height);
+  ctx.fillStyle = "rgba(128, 128, 128, 1.0)"; // Solid grey template, CSS controls visual opacity
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const fontSize = Math.min(rect.width, rect.height) * 0.7;
+  ctx.font = `700 ${fontSize}px "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif`;
+  ctx.fillText(currentChar.char, rect.width / 2, rect.height / 2);
+}
+function renderChineseTracingScreen() {
+  const game = state.game;
+  const tracing = game.chineseTracing;
+  const chars = getAllTracingCharacters();
+  const currentChar = chars[tracing.currentIndex] || { char: "?", pinyin: "", meaning: "", fullWord: "" };
+  const statusClass = !tracing.submitted ? "game-status" : tracing.passed ? "game-status" : "game-status is-danger";
+
+  if (tracing.showWordReveal) {
+    const fullWord = getChineseWords().map(w => w.characters).join("");
+    const pinyin = getChineseWords().map(w => w.pinyin).join(" ");
+    const meaning = getChineseWords().map(w => w.meaning).join(", ");
+    
+    return `
+      <section class="game-shell word-reveal-shell">
+        <div class="word-reveal-hearts" aria-hidden="true">
+          <span class="wrheart wrheart--1">❤️</span>
+          <span class="wrheart wrheart--2">💕</span>
+          <span class="wrheart wrheart--3">❤️</span>
+          <span class="wrheart wrheart--4">💗</span>
+        </div>
+
+        <div class="word-reveal-card">
+          <div class="revealed-love-msg">I love you ❤️</div>
+          <div class="revealed-characters">${escapeHtml(fullWord)}</div>
+          <div class="revealed-pinyin">${escapeHtml(pinyin)}</div>
+          <div class="revealed-meaning">"${escapeHtml(meaning)}"</div>
+          <div class="revealed-monthsary">Happy 3rd Monthsary, my love! 🎉</div>
+        </div>
+
+        <div class="tracing-actions">
+          <div class="button-row">
+            ${tracing.isContinuing 
+              ? `<div class="revealed-loading">
+                   <span class="rl-dot"></span><span class="rl-dot"></span><span class="rl-dot"></span>
+                 </div>` 
+              : `<div class="revealed-loading" style="opacity:0.5;">Continuing automatically…</div>`
+            }
+          </div>
+        </div>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="game-shell">
+      <div class="game-header">
+        <div>
+          <p class="game-kicker">School project test</p>
+          <h1 class="game-title" data-action="secret-owner-tap">Trace It</h1>
+          <p class="game-copy">
+            I need someone to test this character tracing prototype.
+            Draw over the faded character as accurately as you can.
+          </p>
+        </div>
+        <span class="game-test-badge">Prototype v0.3</span>
+      </div>
+
+      <div class="game-hud game-hud--tracing" aria-live="polite">
+        <span>Character <strong>${tracing.currentIndex + 1} / ${chars.length}</strong></span>
+        <span>Result <strong>${tracing.submitted ? getTracingCompliment(tracing.score) : "—"}</strong></span>
+      </div>
+
+      <div class="tracing-canvas-wrap${tracing.submitted && tracing.passed ? " is-success" : ""}">
+        ${!game.running ? `<div class="tracing-character-hint">${escapeHtml(currentChar.char)}</div>` : ""}
+        <canvas id="tracing-template-canvas" class="tracing-template-canvas"></canvas>
+        <canvas
+          id="tracing-canvas"
+          class="tracing-canvas"
+          data-action-zone="tracing"
+        ></canvas>
+        ${tracing.submitted && tracing.passed 
+          ? `
+            <div class="tracing-success-overlay">
+              <div class="success-heart">❤️</div>
+              <div class="success-score">${getTracingCompliment(tracing.score)}</div>
+            </div>
+          ` 
+          : ""
+        }
+      </div>
+
+      <div class="tracing-actions">
+        <p class="${statusClass}">${escapeHtml(tracing.message)}</p>
+        <div class="button-row">
+          ${!game.running
+            ? `<button class="primary-button" type="button" data-action="start-chinese-tracing">Start test</button>`
+            : tracing.submitted
+              ? ""
+              : `<button class="primary-button" type="button" data-action="submit-tracing">Check tracing</button>
+                 <button class="secondary-button" type="button" data-action="clear-tracing">Clear</button>`
+          }
+        </div>
+      </div>
+
+      <p class="game-tip">Tip: draw over the faded character. The closer your strokes match, the higher your score.</p>
     </section>
   `;
 }
@@ -1295,11 +1765,15 @@ function renderMemoryPreviewOverlay() {
     : "";
 
   const footerText = item.title || item.copy || caption || "";
+  const showDownload = item.type !== "video";
 
   return `
     <div class="memory-preview-overlay" data-action="close-memory-preview">
       <div class="memory-preview-card">
-        <button class="memory-preview-close" type="button" data-action="close-memory-preview" aria-label="Close preview">×</button>
+        <div class="memory-preview-top-actions">
+          ${showDownload ? `<button class="memory-preview-download" type="button" data-action="download-memory-preview" aria-label="Download image"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>` : ""}
+          <button class="memory-preview-close" type="button" data-action="close-memory-preview" aria-label="Close preview">×</button>
+        </div>
         <div class="memory-preview-topline">Memory ${memoryNumber}</div>
         <div class="memory-preview-media${mediaDirectionClass}">
           ${item.type === "video"
@@ -1316,6 +1790,42 @@ function renderMemoryPreviewOverlay() {
       </div>
     </div>
   `;
+}
+
+async function downloadMemoryPreviewImage() {
+  const previewItems = getMemoryPreviewItems();
+  const item = previewItems[state.memoryPreview.index];
+
+  if (!item || !item.src) {
+    return;
+  }
+
+  const src = item.src;
+  const filename = `memory-${(item.memoryIndex ?? state.memoryPreview.index) + 1}.jpg`;
+
+  try {
+    let blob;
+
+    if (src.startsWith("data:")) {
+      const response = await fetch(src);
+      blob = await response.blob();
+    } else {
+      const response = await fetch(src, { mode: "cors" });
+      blob = await response.blob();
+    }
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    // Fallback: open in new tab if CORS blocks fetch
+    window.open(src, "_blank");
+  }
 }
 
 function renderFinaleScreen() {
@@ -1879,14 +2389,39 @@ function renderEditorPanel() {
               "This protects the built-in editor.",
               'inputmode="numeric" maxlength="6"'
             )}
+            <label class="editor-field editor-field-full">
+              <span class="editor-label">Game type</span>
+              <select
+                class="editor-select"
+                data-editor-field="gameType"
+              >
+                ${Object.entries(GAME_TYPES).map(([id, info]) => `
+                  <option value="${escapeHtml(id)}" ${draft.gameType === id ? "selected" : ""}>
+                    ${escapeHtml(info.label)} — ${escapeHtml(info.description)}
+                  </option>
+                `).join("")}
+              </select>
+              <span class="editor-help">Choose which mini-game visitors play before the surprise.</span>
+            </label>
             ${renderEditorSlider(
               "Memory game rounds",
               "gameRounds",
               draft.gameRounds,
               1,
               10,
-              "Choose how many rounds the minigame should use."
+              "Choose how many rounds the Memory Pattern minigame uses."
             )}
+            <label class="editor-field editor-field-full">
+              <span class="editor-label">Chinese tracing words</span>
+              <textarea
+                class="editor-textarea"
+                rows="4"
+                data-editor-field="chineseWordsText"
+              >${escapeHtml(draft.chineseWordsText)}</textarea>
+              <span class="editor-help">
+                One word per line. Format: Characters | Pinyin | Meaning (e.g. 我爱你 | Wǒ ài nǐ | I love you)
+              </span>
+            </label>
             ${renderEditorInput("Lock screen title", "lockTitle", draft.lockTitle)}
             ${renderEditorTextarea("Lock screen copy", "lockCopy", draft.lockCopy, "", 3)}
             ${renderEditorInput(
@@ -2039,6 +2574,22 @@ function renderApp() {
   // After DOM is updated, ensure audio state matches the current screen
   if (state.screen === "keepsake") {
     syncAmbientMusic();
+  }
+
+  // Auto-initialize tracing canvas if we are on the game screen, running, and not revealing
+  if (state.screen === "game" && (activeContent.game?.type || "memory-pattern") === "chinese-tracing" && state.game.running && !state.game.chineseTracing.showWordReveal) {
+    requestAnimationFrame(() => {
+      initTracingCanvas();
+      drawTracingTemplate();
+      if (state.game.chineseTracing.submitted) {
+        requestAnimationFrame(() => {
+          const tc = document.getElementById("tracing-template-canvas");
+          if (tc) {
+            tc.classList.add("is-hidden");
+          }
+        });
+      }
+    });
   }
 
   syncScreenInputs();
@@ -3196,9 +3747,19 @@ function buildContentFromDraft() {
     },
     questions,
     game: {
+      type: GAME_TYPES[draft.gameType] ? draft.gameType : "memory-pattern",
       rounds: Number.isInteger(Number(draft.gameRounds)) && Number(draft.gameRounds) > 0
         ? Number(draft.gameRounds)
         : defaultContent.game.rounds,
+      chineseWords: String(draft.chineseWordsText || "")
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => {
+          const [chars, pinyin, meaning] = line.split("|").map((s) => s.trim());
+          return { characters: chars || "", pinyin: pinyin || "", meaning: meaning || "" };
+        })
+        .filter((w) => w.characters),
     },
   });
 
@@ -3873,6 +4434,43 @@ root.addEventListener("click", (event) => {
     return;
   }
 
+  if (action === "start-chinese-tracing") {
+    startChineseTracingGame();
+    return;
+  }
+
+  if (action === "advance-tracing") {
+    advanceTracingCharacter();
+    return;
+  }
+
+  if (action === "retry-tracing") {
+    retryTracingCharacter();
+    return;
+  }
+
+  if (action === "submit-tracing") {
+    submitTracingAttempt();
+    return;
+  }
+
+  if (action === "clear-tracing") {
+    state.game.chineseTracing.paths = [];
+    initTracingCanvas();
+    drawTracingTemplate();
+    return;
+  }
+
+  if (action === "reveal-game-result") {
+    const tracing = state.game.chineseTracing;
+    tracing.isContinuing = true;
+    renderApp();
+    setTimeout(() => {
+      winGame();
+    }, 2000);
+    return;
+  }
+
   if (action === "select-game-tile") {
     chooseFocusTile(Number(actionTarget.dataset.tile));
     return;
@@ -3995,6 +4593,11 @@ root.addEventListener("click", (event) => {
 
   if (action === "print-letter-card") {
     printLetterCard();
+    return;
+  }
+
+  if (action === "download-memory-preview") {
+    downloadMemoryPreviewImage();
     return;
   }
 
